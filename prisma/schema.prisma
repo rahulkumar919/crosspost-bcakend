@@ -1,0 +1,149 @@
+// ─── CrossPost AI — Prisma Schema ────────────────────────────────────────────
+// PostgreSQL via Prisma ORM
+// Run:  npx prisma migrate dev --name init
+//       npx prisma generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Platform {
+  YOUTUBE
+  INSTAGRAM
+  LINKEDIN
+}
+
+enum AccountStatus {
+  CONNECTED
+  EXPIRED
+  REVOKED
+}
+
+enum MediaType {
+  VIDEO
+  IMAGE
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHING
+  COMPLETED
+  PARTIALLY_FAILED
+}
+
+enum PublishStatus {
+  PENDING
+  QUEUED
+  UPLOADING
+  PUBLISHED
+  FAILED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  name          String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  accounts ConnectedAccount[]
+  posts    Post[]
+
+  @@index([email])
+}
+
+model ConnectedAccount {
+  id                   String        @id @default(uuid())
+  user_id              String
+  platform             Platform
+  /// AES-256 encrypted — never read raw; always decrypt via lib/encryption.ts
+  access_token         String
+  /// AES-256 encrypted — nullable for platforms that don't issue refresh tokens
+  refresh_token        String?
+  token_expires_at     DateTime?
+  status               AccountStatus @default(CONNECTED)
+  /// The platform's own user/channel/page ID (e.g. YouTube channel id)
+  platform_account_id  String
+  /// Display name on the platform (e.g. "My YouTube Channel")
+  platform_account_name String
+  scopes               String?       // space-separated granted scopes — useful for debugging
+  created_at           DateTime      @default(now())
+  updated_at           DateTime      @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  // One account per platform per user
+  @@unique([user_id, platform])
+  @@index([user_id])
+  @@index([status])
+}
+
+model Post {
+  id            String     @id @default(uuid())
+  user_id       String
+  /// Cloudinary CDN URL for the final media asset
+  media_url     String
+  media_type    MediaType
+  /// Original Cloudinary public_id — needed for transformations / deletion
+  cloudinary_id String
+  /// Raw user-provided caption sent to AI
+  raw_caption   String?    @db.Text
+  /// AI-generated title (stored here; copied to PostTarget.final_title at publish time)
+  ai_title      String?
+  /// AI-generated description (stored here)
+  ai_description String?   @db.Text
+  /// AI-generated hashtags array
+  ai_hashtags   String[]   @default([])
+  status        PostStatus @default(DRAFT)
+  scheduled_at  DateTime?
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+
+  user    User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  targets PostTarget[]
+
+  @@index([user_id])
+  @@index([status])
+  @@index([user_id, status])
+  @@index([scheduled_at])
+}
+
+model PostTarget {
+  id                String        @id @default(uuid())
+  post_id           String
+  platform          Platform
+  /// The title that will actually be used for this platform publish
+  final_title       String
+  /// The description that will actually be used for this platform publish
+  final_description String        @db.Text
+  /// Hashtags resolved at publish time (snapshot from Post.ai_hashtags or user override)
+  final_hashtags    String[]      @default([])
+  publish_status    PublishStatus @default(PENDING)
+  /// URL of the published post/video on the platform (set on success)
+  platform_post_url String?
+  /// Last error message — user-safe version stored here, full detail in server logs
+  error_message     String?
+  retry_count       Int           @default(0)
+  scheduled_at      DateTime?
+  published_at      DateTime?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
+
+  post Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  // One target per platform per post
+  @@unique([post_id, platform])
+  @@index([post_id])
+  @@index([publish_status])
+  @@index([post_id, publish_status])
+}
