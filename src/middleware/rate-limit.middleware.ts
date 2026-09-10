@@ -21,10 +21,10 @@ export const aiLimiter = rateLimit({
         (req.user?.id ?? req.ip) as string,
 });
 
-/** Auth endpoints — 20 attempts per 15 minutes per IP */
+/** Auth endpoints — 100 attempts per 15 minutes per IP */
 export const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 20,
+    max: 100,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many auth attempts, please try again later." },

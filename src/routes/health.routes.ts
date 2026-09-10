@@ -7,6 +7,16 @@ import { env } from "../config/env";
 
 const router = Router();
 
+/**
+ * GET /health/ping — ultra-lightweight wake-up endpoint.
+ * Returns 200 immediately — used by Vercel to wake Render from free-tier sleep
+ * without running the expensive DB / Cloudinary / AI checks.
+ */
+router.get("/ping", (_req: Request, res: Response) => {
+    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+/** GET /health — full health check (DB, Cloudinary, AI) */
 router.get("/", async (_req: Request, res: Response) => {
     const aiPing = env.AI_PROVIDER === "gemini" ? pingGemini() : pingOllama();
 

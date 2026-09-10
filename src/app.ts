@@ -18,6 +18,10 @@ import healthRoutes from "./routes/health.routes";
 
 const app = express();
 
+// ─── Trust Render's reverse proxy (reads real IP from X-Forwarded-For) ───────
+// Required for rate limiters to work per real user IP instead of Render's internal IP.
+app.set("trust proxy", 1);
+
 // ─── Security headers ────────────────────────────────────────────────────────
 app.use(helmet());
 
