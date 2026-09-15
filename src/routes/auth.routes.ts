@@ -7,6 +7,18 @@ import * as authController from "../controllers/auth.controller";
 
 const router = Router();
 
+// ── Google OAuth upsert — finds or creates user, always returns a JWT ────────
+router.post(
+    "/google",
+    authLimiter,
+    [
+        body("email").isEmail().normalizeEmail().withMessage("Valid email required"),
+        body("name").optional().trim().isLength({ max: 100 }),
+    ],
+    validateRequest,
+    authController.googleUpsert
+);
+
 // ── Signup (kept for Google OAuth backend user creation) ─────────────────────
 router.post(
     "/signup",

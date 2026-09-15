@@ -15,6 +15,26 @@ export async function signup(req: Request, res: Response, next: NextFunction): P
     }
 }
 
+/**
+ * POST /auth/google
+ * Upsert a user via Google OAuth — always succeeds regardless of whether
+ * the account was previously created via OTP or Google. Sets/resets the
+ * google_oauth password hash so subsequent logins always work.
+ */
+export async function googleUpsert(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { email, name } = req.body as { email: string; name?: string };
+        if (!email) {
+            res.status(400).json({ error: "email is required" });
+            return;
+        }
+        const result = await authService.googleUpsert(email, name ?? null);
+        res.status(200).json(result);
+    } catch (err) {
+        next(err);
+    }
+}
+
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { email, password } = req.body as { email: string; password: string };

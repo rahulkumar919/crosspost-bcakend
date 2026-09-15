@@ -45,6 +45,28 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
     return { token, user };
 }
 
+/**
+ * Google OAuth upsert — finds or creates a user and always ensures the
+ * google_oauth password is set. Used by the Next.js refresh-backend-token route
+ * so Google-authenticated users can always get a backend JWT regardless of
+ * whether they previously signed up via OTP with a different password.
+ */
+export async function googleUpsert(email: string, name: string | null): Promise<AuthResult> {
+    const googlePassword = `google_oauth_${email}_crosspost_ai`;
+    const passwordHash = await bcrypt.hash(googlePassword, SALT_ROUNDS);
+
+    // upsert: create if missing, update password_hash if exists
+    const user = await prisma.user.upsert({
+        where: { email },
+        update: { password_hash: passwordHash, name: name ?? undefined },
+        create: { email, password_hash: passwordHash, name: name ?? null },
+        select: { id: true, email: true, name: true },
+    });
+
+    const token = signToken(user.id, user.email);
+    return { token, user };
+}
+
 export async function login(input: LoginInput): Promise<AuthResult> {
     const user = await prisma.user.findUnique({
         where: { email: input.email },

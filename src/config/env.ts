@@ -28,15 +28,26 @@ const envSchema = z.object({
     CLOUDINARY_API_KEY: z.string().min(1),
     CLOUDINARY_API_SECRET: z.string().min(1),
 
-    // AI Provider — switch between local Ollama and hosted Gemini
-    AI_PROVIDER: z.enum(["ollama", "gemini"]).default("ollama"),
+    // ─── AI Provider ──────────────────────────────────────────────────────────
+    // Switch between providers by changing AI_PROVIDER in .env.
+    // Available: "gemini" | "mistral"
+    AI_PROVIDER: z.enum(["gemini", "mistral", "ollama"]).default("gemini"),
+
+    // ─── Gemini ───────────────────────────────────────────────────────────────
     GEMINI_API_KEY: z.string().default(""),
     GEMINI_MODEL: z.string().default("gemini-1.5-flash"),
 
-    // Ollama — optional, gracefully degraded if not running
-    OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
+    // ─── Mistral ──────────────────────────────────────────────────────────────
+    // Get your key at: https://console.mistral.ai/
+    // Models: mistral-small-latest | mistral-medium-latest | mistral-large-latest
+    MISTRAL_API_KEY: z.string().default(""),
+    MISTRAL_MODEL: z.string().default("mistral-small-latest"),
+    MISTRAL_TIMEOUT_MS: z.coerce.number().default(15000),
+
+    // ─── Ollama (deprecated - removed) ───────────────────────────────────────
+    OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
     OLLAMA_MODEL: z.string().default("llama3.2:latest"),
-    OLLAMA_TIMEOUT_MS: z.coerce.number().default(45000),
+    OLLAMA_TIMEOUT_MS: z.coerce.number().default(10000),
 
     // YouTube — optional (platform won't work without it, but server still starts)
     YOUTUBE_CLIENT_ID: z.string().default(""),
