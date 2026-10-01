@@ -69,6 +69,12 @@ const envSchema = z.object({
     // Email / OTP (Nodemailer via Gmail)
     SMTP_USER: z.string().default(""),
     SMTP_PASS: z.string().default(""),
+
+    // ─── Automation / Webhook ─────────────────────────────────────────────────
+    INSTAGRAM_WEBHOOK_SECRET: z.string().default(""),
+    INSTAGRAM_APP_SECRET: z.string().default(""),
+    WHATSAPP_APP_SECRET: z.string().default(""),
+    WHATSAPP_VERIFY_TOKEN: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

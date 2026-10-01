@@ -1,6 +1,6 @@
 // ─── CrossPost AI — Prisma Schema ────────────────────────────────────────────
 // PostgreSQL via Prisma ORM
-// Run:  npx prisma migrate dev --name init
+// Run:  npx prisma migrate dev --name <migration_name>
 //       npx prisma generate
 
 generator client {
@@ -12,7 +12,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Enums ───────────────────────────────────────────────────────────────────
+// ─── Enums: Publishing ───────────────────────────────────────────────────────
 
 enum Platform {
   YOUTUBE
@@ -46,7 +46,86 @@ enum PublishStatus {
   FAILED
 }
 
-// ─── Models ──────────────────────────────────────────────────────────────────
+// ─── Enums: Automation ───────────────────────────────────────────────────────
+
+enum AutomationChannel {
+  INSTAGRAM
+  WHATSAPP
+  BOTH
+}
+
+enum AutomationTriggerType {
+  INSTAGRAM_COMMENT
+  INSTAGRAM_COMMENT_KEYWORD
+  INSTAGRAM_DM
+  INSTAGRAM_DM_KEYWORD
+  WHATSAPP_MESSAGE
+  WHATSAPP_KEYWORD
+}
+
+enum AutomationConditionOperator {
+  CONTAINS
+  EXACT
+  STARTS_WITH
+  ANY
+}
+
+enum AutomationActionType {
+  SEND_MESSAGE
+  SEND_PUBLIC_REPLY
+  SEND_PRIVATE_REPLY
+  SEND_LINK
+  AI_REPLY
+  ASSIGN_HUMAN
+  TAG_CONVERSATION
+  PAUSE_AUTOMATION
+}
+
+enum AutomationStatus {
+  ACTIVE
+  PAUSED
+  DRAFT
+}
+
+// ─── Enums: Conversation ─────────────────────────────────────────────────────
+
+enum ConversationChannel {
+  INSTAGRAM
+  WHATSAPP
+}
+
+enum ConversationMode {
+  BOT
+  HUMAN
+  PAUSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageSenderType {
+  USER
+  BOT
+  HUMAN_AGENT
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum AIMode {
+  OFF
+  FIXED_ONLY
+  FIXED_WITH_AI_FALLBACK
+  AI_ONLY
+}
+
+// ─── Models: Existing ────────────────────────────────────────────────────────
 
 model User {
   id            String   @id @default(uuid())
@@ -56,29 +135,33 @@ model User {
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
-  accounts ConnectedAccount[]
-  posts    Post[]
+  accounts      ConnectedAccount[]
+  posts         Post[]
+  automations   Automation[]
+  conversations Conversation[]
+  knowledge     KnowledgeBase?
+  whatsapp      WhatsAppAccount?
 
   @@index([email])
 }
 
 model ConnectedAccount {
-  id                   String        @id @default(uuid())
-  user_id              String
-  platform             Platform
+  id                    String        @id @default(uuid())
+  user_id               String
+  platform              Platform
   /// AES-256 encrypted — never read raw; always decrypt via lib/encryption.ts
-  access_token         String
+  access_token          String
   /// AES-256 encrypted — nullable for platforms that don't issue refresh tokens
-  refresh_token        String?
-  token_expires_at     DateTime?
-  status               AccountStatus @default(CONNECTED)
+  refresh_token         String?
+  token_expires_at      DateTime?
+  status                AccountStatus @default(CONNECTED)
   /// The platform's own user/channel/page ID (e.g. YouTube channel id)
-  platform_account_id  String
+  platform_account_id   String
   /// Display name on the platform (e.g. "My YouTube Channel")
   platform_account_name String
-  scopes               String?       // space-separated granted scopes — useful for debugging
-  created_at           DateTime      @default(now())
-  updated_at           DateTime      @updatedAt
+  scopes                String? // space-separated granted scopes
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -89,25 +172,19 @@ model ConnectedAccount {
 }
 
 model Post {
-  id            String     @id @default(uuid())
-  user_id       String
-  /// Cloudinary CDN URL for the final media asset
-  media_url     String
-  media_type    MediaType
-  /// Original Cloudinary public_id — needed for transformations / deletion
-  cloudinary_id String
-  /// Raw user-provided caption sent to AI
-  raw_caption   String?    @db.Text
-  /// AI-generated title (stored here; copied to PostTarget.final_title at publish time)
-  ai_title      String?
-  /// AI-generated description (stored here)
-  ai_description String?   @db.Text
-  /// AI-generated hashtags array
-  ai_hashtags   String[]   @default([])
-  status        PostStatus @default(DRAFT)
-  scheduled_at  DateTime?
-  created_at    DateTime   @default(now())
-  updated_at    DateTime   @updatedAt
+  id             String     @id @default(uuid())
+  user_id        String
+  media_url      String
+  media_type     MediaType
+  cloudinary_id  String
+  raw_caption    String?    @db.Text
+  ai_title       String?
+  ai_description String?    @db.Text
+  ai_hashtags    String[]   @default([])
+  status         PostStatus @default(DRAFT)
+  scheduled_at   DateTime?
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
 
   user    User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
   targets PostTarget[]
@@ -122,16 +199,11 @@ model PostTarget {
   id                String        @id @default(uuid())
   post_id           String
   platform          Platform
-  /// The title that will actually be used for this platform publish
   final_title       String
-  /// The description that will actually be used for this platform publish
   final_description String        @db.Text
-  /// Hashtags resolved at publish time (snapshot from Post.ai_hashtags or user override)
   final_hashtags    String[]      @default([])
   publish_status    PublishStatus @default(PENDING)
-  /// URL of the published post/video on the platform (set on success)
   platform_post_url String?
-  /// Last error message — user-safe version stored here, full detail in server logs
   error_message     String?
   retry_count       Int           @default(0)
   scheduled_at      DateTime?
@@ -141,9 +213,270 @@ model PostTarget {
 
   post Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
 
-  // One target per platform per post
   @@unique([post_id, platform])
   @@index([post_id])
   @@index([publish_status])
   @@index([post_id, publish_status])
+}
+
+// ─── Models: WhatsApp ─────────────────────────────────────────────────────────
+
+/// Stores WhatsApp Business Cloud API credentials per user (AES-256 encrypted)
+model WhatsAppAccount {
+  id                 String        @id @default(uuid())
+  user_id            String        @unique
+  /// WhatsApp Business phone number ID (from Meta Business Suite)
+  phone_number_id    String
+  /// WhatsApp Business Account ID (WABA)
+  waba_id            String
+  /// Display phone number (e.g. +91 98765 43210)
+  display_phone      String
+  /// AES-256-GCM encrypted permanent access token
+  access_token       String
+  status             AccountStatus @default(CONNECTED)
+  created_at         DateTime      @default(now())
+  updated_at         DateTime      @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+// ─── Models: Automation ──────────────────────────────────────────────────────
+
+model Automation {
+  id          String            @id @default(uuid())
+  user_id     String
+  name        String
+  description String?
+  channel     AutomationChannel
+  status      AutomationStatus  @default(DRAFT)
+  /// Higher number = higher priority. When multiple automations match, highest wins.
+  priority    Int               @default(10)
+  /// AI mode for this automation
+  ai_mode     AIMode            @default(FIXED_ONLY)
+  /// Cooldown in seconds — prevent same automation firing repeatedly per conversation
+  cooldown_seconds Int          @default(0)
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
+
+  user       User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  triggers   AutomationTrigger[]
+  conditions AutomationCondition[]
+  actions    AutomationAction[]
+  executions AutomationExecution[]
+
+  @@index([user_id])
+  @@index([user_id, status])
+  @@index([user_id, channel])
+}
+
+model AutomationTrigger {
+  id            String                @id @default(uuid())
+  automation_id String
+  type          AutomationTriggerType
+  /// Optional: specific Instagram post ID to scope comment triggers to one post
+  ig_post_id    String?
+  created_at    DateTime              @default(now())
+
+  automation Automation @relation(fields: [automation_id], references: [id], onDelete: Cascade)
+
+  @@index([automation_id])
+}
+
+model AutomationCondition {
+  id            String                       @id @default(uuid())
+  automation_id String
+  /// Field to evaluate — e.g. "message_text"
+  field         String                       @default("message_text")
+  operator      AutomationConditionOperator  @default(CONTAINS)
+  /// Comma-separated keywords — e.g. "hi,hello,hey"
+  value         String
+  /// Case insensitive matching
+  case_insensitive Boolean                   @default(true)
+  created_at    DateTime                     @default(now())
+
+  automation Automation @relation(fields: [automation_id], references: [id], onDelete: Cascade)
+
+  @@index([automation_id])
+}
+
+/// Each automation can have multiple sequential actions
+model AutomationAction {
+  id            String               @id @default(uuid())
+  automation_id String
+  type          AutomationActionType
+  /// Execution order — actions run in ascending order
+  order         Int                  @default(0)
+  /// JSON config: message text, URL, button text, tag name, etc.
+  config        Json                 @default("{}")
+  created_at    DateTime             @default(now())
+
+  automation Automation @relation(fields: [automation_id], references: [id], onDelete: Cascade)
+
+  @@index([automation_id])
+}
+
+/// Execution log — one row per automation run
+model AutomationExecution {
+  id                    String   @id @default(uuid())
+  automation_id         String
+  conversation_id       String?
+  external_message_id   String?
+  channel               String
+  success               Boolean
+  error_message         String?
+  /// Which actions were executed and their results (JSON array)
+  actions_executed      Json     @default("[]")
+  executed_at           DateTime @default(now())
+
+  automation   Automation    @relation(fields: [automation_id], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversation_id], references: [id])
+
+  @@index([automation_id])
+  @@index([conversation_id])
+  @@index([executed_at])
+}
+
+// ─── Models: Conversation / Inbox ────────────────────────────────────────────
+
+model Conversation {
+  id                       String              @id @default(uuid())
+  user_id                  String
+  channel                  ConversationChannel
+  /// Which platform account this conversation belongs to (Instagram IGID / WA phone_number_id)
+  channel_account_id       String
+  /// External conversation ID from the platform (Instagram thread ID / WA phone number)
+  external_conversation_id String
+  /// Platform's user identifier (Instagram PSID / WhatsApp phone number)
+  external_user_id         String
+  /// Display name from platform profile (may be null)
+  display_name             String?
+  /// Profile picture URL
+  profile_picture_url      String?
+  /// Bot / Human / Paused
+  mode                     ConversationMode    @default(BOT)
+  unread_count             Int                 @default(0)
+  last_message_at          DateTime?
+  last_inbound_at          DateTime?
+  last_outbound_at         DateTime?
+  is_archived              Boolean             @default(false)
+  created_at               DateTime            @default(now())
+  updated_at               DateTime            @updatedAt
+
+  user     User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  messages ConversationMessage[]
+  tags     ConversationTagLink[]
+  executions AutomationExecution[]
+
+  /// Unique conversation per user + channel + external account + external user
+  @@unique([user_id, channel, channel_account_id, external_user_id])
+  @@index([user_id])
+  @@index([user_id, channel])
+  @@index([user_id, mode])
+  @@index([last_message_at])
+}
+
+model ConversationMessage {
+  id                  String            @id @default(uuid())
+  conversation_id     String
+  /// Platform's own message ID — used for idempotency
+  external_message_id String?
+  direction           MessageDirection
+  sender_type         MessageSenderType
+  content             String            @db.Text
+  media_url           String?
+  /// Platform-specific extras (reaction, reply-to, etc.)
+  metadata            Json              @default("{}")
+  /// Which automation triggered this outbound message (if any)
+  automation_id       String?
+  status              MessageStatus     @default(SENT)
+  created_at          DateTime          @default(now())
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id])
+  @@index([conversation_id, direction])
+  @@index([external_message_id])
+}
+
+// ─── Models: Idempotency ─────────────────────────────────────────────────────
+
+/// Stores processed webhook event IDs to prevent duplicate processing
+model WebhookEvent {
+  id               String   @id @default(uuid())
+  /// Channel: INSTAGRAM | WHATSAPP
+  channel          String
+  /// Platform's unique event/message ID
+  external_event_id String
+  /// user_id who owns the connected account
+  user_id          String
+  processed_at     DateTime @default(now())
+
+  @@unique([channel, external_event_id])
+  @@index([channel, external_event_id])
+  @@index([processed_at])
+}
+
+// ─── Models: Knowledge Base ──────────────────────────────────────────────────
+
+/// One knowledge base per user — used by AI to answer DMs/messages
+model KnowledgeBase {
+  id          String   @id @default(uuid())
+  user_id     String   @unique
+  /// Creator's name / brand name
+  creator_name    String   @default("")
+  /// Short bio / about
+  about           String   @db.Text @default("")
+  /// Topics the creator covers (comma-separated or JSON array)
+  topics          String[] @default([])
+  /// Services offered (JSON array of {name, description})
+  services        Json     @default("[]")
+  /// Courses (JSON array of {name, description, url})
+  courses         Json     @default("[]")
+  /// Resources (JSON array of {name, url, description})
+  resources       Json     @default("[]")
+  /// FAQs (JSON array of {question, answer})
+  faqs            Json     @default("[]")
+  /// Links (JSON array of {label, url})
+  links           Json     @default("[]")
+  /// Contact info (JSON: {email, phone, website})
+  contact         Json     @default("{}")
+  /// Policies (plain text)
+  policies        String   @db.Text @default("")
+  /// AI system prompt override (advanced)
+  ai_system_prompt String? @db.Text
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+// ─── Models: Tags ────────────────────────────────────────────────────────────
+
+model ConversationTag {
+  id         String   @id @default(uuid())
+  user_id    String
+  name       String
+  color      String   @default("#6C5CE7")
+  created_at DateTime @default(now())
+
+  links ConversationTagLink[]
+
+  @@unique([user_id, name])
+  @@index([user_id])
+}
+
+model ConversationTagLink {
+  id              String   @id @default(uuid())
+  conversation_id String
+  tag_id          String
+  created_at      DateTime @default(now())
+
+  conversation Conversation    @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  tag          ConversationTag @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, tag_id])
 }

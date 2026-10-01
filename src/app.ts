@@ -15,6 +15,14 @@ import postsRoutes from "./routes/posts.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import calendarRoutes from "./routes/calendar.routes";
 import healthRoutes from "./routes/health.routes";
+import automationRoutes from "./routes/automation.routes";
+import conversationRoutes from "./routes/conversation.routes";
+import knowledgeRoutes from "./routes/knowledge.routes";
+import whatsappRoutes from "./routes/whatsapp.routes";
+
+// Webhook imports (no JWT — these are called by Meta)
+import instagramWebhook from "./webhooks/instagram.webhook";
+import whatsappWebhook from "./webhooks/whatsapp.webhook";
 
 const app = express();
 
@@ -59,6 +67,16 @@ app.use("/ai", aiRoutes);
 app.use("/posts", postsRoutes);
 app.use("/analytics", analyticsRoutes);
 app.use("/calendar", calendarRoutes);
+
+// ─── Automation + Inbox routes (JWT protected) ─────────────────────────────
+app.use("/automations", automationRoutes);
+app.use("/conversations", conversationRoutes);
+app.use("/knowledge", knowledgeRoutes);
+app.use("/whatsapp", whatsappRoutes);
+
+// ─── Webhook routes (called by Meta — no JWT, has HMAC signature verification)
+app.use("/webhooks/instagram", instagramWebhook);
+app.use("/webhooks/whatsapp", whatsappWebhook);
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

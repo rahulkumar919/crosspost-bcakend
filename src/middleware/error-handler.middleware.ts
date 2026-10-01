@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger";
 import { OllamaError } from "../lib/ollama-client";
+import { AIProviderError } from "../ai-providers/AIError";
 
 /** Shape of every error response sent to the client */
 interface ErrorResponse {
@@ -48,9 +49,48 @@ export function errorHandler(
         return;
     }
 
+    // AIProviderError (Gemini / Mistral failures)
+    if (err instanceof AIProviderError) {
+        const statusMap: Record<AIProviderError["kind"], number> = {
+            UNREACHABLE: 503,
+            TIMEOUT: 504,
+            INVALID_JSON: 502,
+            MODEL_ERROR: 502,
+        };
+        const messageMap: Record<AIProviderError["kind"], string> = {
+            UNREACHABLE: "AI service is currently unavailable. Please try again later.",
+            TIMEOUT: "AI generation timed out. Please try again.",
+            INVALID_JSON: "AI returned an unexpected response. Please try again.",
+            MODEL_ERROR: "AI model error. Please try again.",
+        };
+        res.status(statusMap[err.kind]).json({
+            error: messageMap[err.kind],
+            code: `AI_${err.kind}`,
+        } satisfies ErrorResponse);
+        return;
+    }
+
     if (err instanceof AppError) {
         res.status(err.statusCode).json({ error: err.message, code: err.code } satisfies ErrorResponse);
         return;
+    }
+
+    // Axios errors from platform adapters (YouTube, Instagram, LinkedIn)
+    if (typeof err === "object" && err !== null && "isAxiosError" in err) {
+        const axErr = err as { response?: { status?: number; data?: { error?: { message?: string } } }; message?: string };
+        const status = axErr.response?.status;
+        if (status === 401 || status === 403) {
+            res.status(401).json({ error: "Platform account authentication failed. Please reconnect your account.", code: "PLATFORM_AUTH_FAILED" });
+            return;
+        }
+        if (status === 429) {
+            res.status(429).json({ error: "Platform rate limit reached. Please try again later.", code: "RATE_LIMITED" });
+            return;
+        }
+        if (status && status >= 500) {
+            res.status(502).json({ error: "Platform service is temporarily unavailable. Please try again.", code: "PLATFORM_UNAVAILABLE" });
+            return;
+        }
     }
 
     // Prisma known error codes

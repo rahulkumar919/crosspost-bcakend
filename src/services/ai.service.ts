@@ -1,15 +1,14 @@
 /**
- * AI Content Generation & Strategy Service
+ * AI Content Generation & SEO Strategy Engine
  *
- * Designed for Rahul Kumar — AI Full Stack Developer & Content Creator.
- * Powers multi-platform content optimization across YouTube, Instagram, and LinkedIn.
+ * Expert-level SEO content generation for Rahul Kumar — AI Full Stack Developer.
+ * Built with deep understanding of YouTube Algorithm, Instagram Reels virality,
+ * and LinkedIn authority positioning.
  *
- * Core Growth Engine:
- *   Relevance → Clear promise → Useful content → Trust → Conversion
- *   (Strictly rejects misleading clickbait, fake urgency, and generic filler).
+ * SEO Philosophy:
+ *   Search Intent Match → Keyword-Rich Hook → Value Delivery → Trust → Growth
  *
- * Supported Providers:
- *   Google Gemini (Primary / Secondary) & Mistral AI with smart failover.
+ * Supported Providers: Google Gemini (Primary) & Mistral AI (Failover)
  */
 import { env } from "../config/env";
 import { getProvider } from "../ai-providers/registry";
@@ -24,8 +23,8 @@ import type {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const YOUTUBE_TITLE_MAX    = 100;
-const YOUTUBE_TITLE_TARGET = 80;
+const YOUTUBE_TITLE_MAX = 100;
+const YOUTUBE_TITLE_TARGET = 70; // Sweet spot for CTR + full display
 
 export const CONTENT_PILLARS: ContentPillar[] = [
     "AI Full Stack Development",
@@ -41,198 +40,241 @@ export const CONTENT_PILLARS: ContentPillar[] = [
     "Software Career Education",
 ];
 
-// ─── Master System Prompt ─────────────────────────────────────────────────────
+// ─── Master SEO System Prompt ─────────────────────────────────────────────────
 
-const STRATEGIC_SYSTEM_PROMPT = `You are a Senior AI Full Stack Architect and Social Media Growth Strategist for Rahul Kumar, an AI Full Stack Developer and BCA student specializing in:
-- AI Full Stack Development (React, Next.js, Node.js, Express, MongoDB)
-- Generative AI, LLM Applications, RAG, LangChain, and LangGraph
-- AI Agent Development & Real-world Project Building
-- BCA-to-Placement Journey, Freelancing, and Developer Education
+const STRATEGIC_SYSTEM_PROMPT = `You are a world-class YouTube SEO Strategist and Viral Content Architect with 10+ years of experience growing creator channels to 100K+ subscribers.
 
-MISSION:
-Transform the creator's video concept/caption into fact-grounded, high-converting content for YouTube, Instagram Reels, and LinkedIn.
-Principle: Relevance → Clear promise → Useful content → Trust → Conversion.
+CRITICAL RULE #1: READ THE CREATOR'S CONTENT IDEA CAREFULLY.
+Your ENTIRE output must be about the EXACT TOPIC the creator described.
+Do NOT generate generic content. Do NOT default to "Build an AI app" or "Full Stack tutorial" if the creator's topic is something else entirely.
+If the creator says "BCA students aren't taught right skills" — your title MUST be about BCA skills gap, NOT about building an app.
+If the creator says "freelancing tips" — your title MUST be about freelancing, NOT about AI development.
+UNDERSTAND THE TOPIC FIRST, THEN OPTIMIZE.
 
-STRICT EDITORIAL RULES:
-1. NO MISLEADING CLICKBAIT: No "This video changes EVERYTHING", no fake urgency, no unsubstantiated $ amounts or fake metrics.
-2. PRESERVE GROUNDED TRUTH: Build authentic engineering credibility. Explain actual architecture, logic, and takeaways.
-3. YOUTUBE RULES:
-   - Title: Target ≤${YOUTUBE_TITLE_TARGET} chars (HARD MAX: 100). Clear, specific, search-friendly.
-   - Description: 350–800 chars. 1-sentence value hook, ▶ 3 key technical takeaways, natural search keywords, and subscribe/GitHub CTA.
-   - Hashtags: Exactly 20 tiered tags without '#' symbol.
-4. INSTAGRAM REELS RULES:
-   - Hook: First 1–2 lines must stop the developer's scroll on mobile.
-   - Body: Conversational, digestible bullet takeaways, relatable tone.
-   - CTA: Meaningful engagement (e.g. "Drop your thoughts below", "Save this for your next project").
-   - Hashtags: 20 clean tags without '#' symbol.
-5. LINKEDIN RULES:
-   - Headline: Engaging professional technical hook.
-   - Body: Clean whitespace, architectural insight or lesson learned, practical takeaways.
-   - CTA: Thought-provoking industry discussion question.
-   - Hashtags: Exactly 4–5 targeted professional tags (e.g. "softwareengineering", "artificialintelligence", "fullstack").
-6. PILLAR CLASSIFICATION:
-   Classify into exactly one: "AI Full Stack Development" | "Generative AI & LLMs" | "RAG & LangGraph" | "AI Agents" | "Web Development" | "Coding Tutorial" | "Project Showcase" | "Developer Journey" | "BCA Placement" | "Freelancing & Clients" | "Software Career Education".
+You specialize in:
+- YouTube Algorithm optimization (CTR, watch time, search rank, suggested video signals)
+- Instagram Reels virality mechanics (hook retention, saves, shares, explore page)
+- LinkedIn thought leadership and professional authority positioning
+- Keyword research, search intent mapping, and semantic SEO
+- Multi-lingual content (English + Hinglish for Indian tech audience)
 
-OUTPUT FORMAT:
-Return ONLY a valid raw JSON object matching this structure (no markdown fences, no text outside JSON):
+YOUTUBE SEO — EXPERT RULES:
+TITLE (CRITICAL — determines 70% of your success):
+- UNDERSTAND the creator's topic FIRST, then craft the title around it
+- Front-load the PRIMARY keyword in first 3-4 words (YouTube crawls left to right)
+- Target EXACTLY 50-70 characters for full display + max CTR (HARD MAX: 100 chars)
+- Use HIGH-CTR power words: "Nobody Tells You", "Truth About", "Mistake", "Reality", "Complete Guide", "Don't", "Stop", "Why"
+- Emotional hooks work: curiosity gaps, bold claims, relatable frustrations
+- Hinglish titles work GREAT for Indian tech audience (e.g. "BCA Kar Rahe Ho? Ye Skills College Nahi Sikhayega")
+- NEVER use clickbait, fake metrics, or misleading promises
+
+DESCRIPTION (SEO GOLD — YouTube indexes every word):
+- LINE 1 (Above the fold): Primary keyword + clear value promise related to THE ACTUAL TOPIC
+- For Indian tech audience: mixing Hindi/Hinglish in description is okay and engaging
+- STRUCTURE: Hook line → value bullets → timestamps → subscribe CTA → keyword footer
+- KEYWORD DENSITY: Primary keyword 2-3x naturally, secondary 1-2x each
+- TARGET 400-600 chars
+- Include a strong CTA like "Comment ROADMAP" or "Save this" at the end
+
+HASHTAGS (YouTube uses top 3 for categorization):
+- EXACTLY 15 hashtags: 3 broad, 5 mid-tier niche, 7 long-tail specific
+- Hashtags MUST be relevant to the ACTUAL TOPIC
+- NO hash symbol in the array
+
+INSTAGRAM REELS SEO — EXPERT RULES:
+TITLE: 3-7 words, must STOP the scroll instantly — use the creator's exact topic
+CAPTION:
+- HOOK (Line 1-2): Strong pattern interrupt using THE ACTUAL TOPIC
+- VALUE BODY: 3-5 tight bullet points with emojis, digestible on mobile
+- ENGAGEMENT TRIGGER: "Save this" or discussion CTA (saves = biggest ranking signal)
+- Hinglish captions are MORE engaging for Indian audience
+HASHTAGS - EXACTLY 20 hashtags tiered:
+- 4 MEGA (1M+ posts): relevant broad tags
+- 6 LARGE (100K-1M): niche-relevant tags
+- 6 MEDIUM (10K-100K): specific topic tags
+- 4 NICHE/MICRO (<10K): ultra-specific long-tail
+
+LINKEDIN SEO — EXPERT RULES:
+TITLE: Professional but bold, challenge conventional wisdom
+CONTENT:
+- LINE 1 hook before "see more" — about THE ACTUAL TOPIC
+- Strategic white space — single sentences per line
+- Genuine discussion question drives comments
+- 150-300 words optimal
+HASHTAGS: EXACTLY 5 tags — 2 broad professional + 2 niche + 1 trending
+
+SEO SCORING: Include seoScore (0-100) per platform.
+
+OUTPUT FORMAT — STRICT JSON ONLY. Return ONLY valid raw JSON. No markdown fences.
 {
   "analysis": {
-    "pillar": "AI Full Stack Development",
+    "pillar": "string — detected content category",
     "targetAudience": "string",
-    "primaryKeyword": "string",
-    "secondaryKeywords": ["kw1", "kw2", "kw3"],
-    "contentObjective": "education",
-    "hookType": "problem_solution",
-    "ctaType": "discussion"
+    "primaryKeyword": "string — the main search keyword for this specific topic",
+    "secondaryKeywords": ["kw1", "kw2", "kw3", "kw4"],
+    "searchIntent": "informational | tutorial | project_demo | career | inspiration",
+    "contentObjective": "education | project_demo | career_growth | authority",
+    "hookType": "problem_solution | technical_curiosity | case_study | contrarian | how_to",
+    "ctaType": "discussion | follow | github_repo | resource | save"
   },
   "youtube": {
-    "title": "string (≤${YOUTUBE_TITLE_TARGET} chars, max 100)",
-    "description": "string (350-800 chars, value hook + ▶ bullets + CTA)",
-    "hashtags": ["20", "clean", "tags", "no", "hash"]
+    "title": "string — 50-70 chars, about the ACTUAL TOPIC, keyword-front-loaded",
+    "description": "string — 400-600 chars, about the ACTUAL TOPIC",
+    "hashtags": ["15 relevant hashtags"],
+    "seoScore": 87
   },
   "instagram": {
-    "title": "string (Reel headline)",
-    "description": "string (Reel caption with hook, bullets, CTA)",
-    "hashtags": ["20", "clean", "tags", "no", "hash"]
+    "title": "string — 3-7 word scroll-stopping hook about the ACTUAL TOPIC",
+    "description": "string — hook + value bullets + CTA",
+    "hashtags": ["20 relevant hashtags"],
+    "seoScore": 82
   },
   "linkedin": {
-    "title": "string (Post headline)",
-    "description": "string (Professional insights with line breaks and discussion CTA)",
-    "hashtags": ["4", "to", "5", "tags"]
+    "title": "string — bold professional hook about the ACTUAL TOPIC",
+    "description": "string — insight + value + discussion CTA",
+    "hashtags": ["5 relevant tags"],
+    "seoScore": 79
   }
 }`;
 
-const ENHANCE_SYSTEM_PROMPT = `You are a Senior AI Content Strategist and Copywriter for Rahul Kumar (AI Full Stack Developer).
-Your task: Review and upgrade the creator's existing draft into high-clarity, high-converting versions tailored for YouTube, Instagram Reels, and LinkedIn.
+// ─── Enhance System Prompt ────────────────────────────────────────────────────
+
+const ENHANCE_SYSTEM_PROMPT = `You are a world-class YouTube SEO Strategist and Content Upgrade Specialist with 10+ years upgrading developer content from "okay" to "algorithm-optimized."
+
+Your job: Take the creator's EXISTING draft and upgrade it to maximum SEO potential across YouTube, Instagram, and LinkedIn.
+
+UPGRADE CHECKLIST:
+- YouTube Title: Primary keyword in first 3-4 words? 50-70 chars? CTR power words? Fix all gaps.
+- YouTube Description: Line 1 has keyword + promise? Proper bullet points with secondary keywords? Keyword footer? Timestamps placeholder?
+- Instagram: Is the hook a genuine scroll-stopper? Properly tiered hashtags (mega/large/medium/micro)?
+- LinkedIn: Line 1 creates curiosity? Strategic white space? Genuine discussion question at end?
+- All hashtag tiers covered?
 
 RULES:
-- Strengthen the hook and sharpen technical clarity.
-- Remove passive voice, fluff, and generic buzzwords.
-- Ground the content in practical developer reality.
-- Maintain YouTube title ≤${YOUTUBE_TITLE_TARGET} chars (hard max: 100).
-- Generate platform-native copy for YouTube, Instagram, and LinkedIn.
-- Output ONLY a valid raw JSON object adhering to the schema.`;
+- Strengthen hooks, remove passive voice and buzzwords
+- Ground all content in practical developer reality
+- Keep YouTube title 50-70 chars (hard max 100)
+- Output ONLY valid raw JSON matching the required schema exactly`;
 
 const SHORTEN_TITLE_PROMPT = (title: string) =>
-    `Shorten this developer video title to ≤${YOUTUBE_TITLE_TARGET} characters while preserving technical clarity and keyword punch. Return ONLY the title text:\n\n"${title}"`;
+    `You are a YouTube SEO expert. Shorten this video title to 50-70 characters while keeping the primary keyword in the FIRST 3-4 words. Return ONLY the shortened title text:\n\n"${title}"`;
 
-// ─── Smart Context-Grounded Fallback Engine ───────────────────────────────────
+// ─── Smart Fallback Engine ────────────────────────────────────────────────────
 
 function detectPillarFromContext(text: string): ContentPillar {
     const lower = text.toLowerCase();
-    if (lower.includes("rag") || lower.includes("langgraph") || lower.includes("retrieval") || lower.includes("vector")) {
-        return "RAG & LangGraph";
-    }
-    if (lower.includes("agent") || lower.includes("autonom") || lower.includes("tool call")) {
-        return "AI Agents";
-    }
-    if (lower.includes("llm") || lower.includes("generative") || lower.includes("gemini") || lower.includes("prompt")) {
-        return "Generative AI & LLMs";
-    }
-    if (lower.includes("bca") || lower.includes("placement") || lower.includes("interview") || lower.includes("campus")) {
-        return "BCA Placement";
-    }
-    if (lower.includes("freelance") || lower.includes("client") || lower.includes("upwork") || lower.includes("contract")) {
-        return "Freelancing & Clients";
-    }
-    if (lower.includes("journey") || lower.includes("story") || lower.includes("learned") || lower.includes("mistake")) {
-        return "Developer Journey";
-    }
-    if (lower.includes("tutorial") || lower.includes("how to code") || lower.includes("build from scratch")) {
-        return "Coding Tutorial";
-    }
-    if (lower.includes("project") || lower.includes("portfolio") || lower.includes("showcase") || lower.includes("demo")) {
-        return "Project Showcase";
-    }
-    if (lower.includes("career") || lower.includes("guidance") || lower.includes("roadmap") || lower.includes("student")) {
-        return "Software Career Education";
-    }
-    if (lower.includes("css") || lower.includes("html") || lower.includes("frontend") || lower.includes("backend") || lower.includes("api")) {
-        return "Web Development";
-    }
+    if (lower.includes("rag") || lower.includes("langgraph") || lower.includes("retrieval") || lower.includes("vector")) return "RAG & LangGraph";
+    if (lower.includes("agent") || lower.includes("autonom") || lower.includes("tool call") || lower.includes("agentic")) return "AI Agents";
+    if (lower.includes("llm") || lower.includes("generative") || lower.includes("gemini") || lower.includes("gpt") || lower.includes("prompt")) return "Generative AI & LLMs";
+    if (lower.includes("bca") || lower.includes("placement") || lower.includes("interview") || lower.includes("campus")) return "BCA Placement";
+    if (lower.includes("freelance") || lower.includes("client") || lower.includes("upwork") || lower.includes("fiverr")) return "Freelancing & Clients";
+    if (lower.includes("journey") || lower.includes("story") || lower.includes("learned") || lower.includes("mistake")) return "Developer Journey";
+    if (lower.includes("tutorial") || lower.includes("how to") || lower.includes("build") || lower.includes("from scratch")) return "Coding Tutorial";
+    if (lower.includes("project") || lower.includes("portfolio") || lower.includes("showcase") || lower.includes("demo")) return "Project Showcase";
+    if (lower.includes("career") || lower.includes("guidance") || lower.includes("roadmap") || lower.includes("student")) return "Software Career Education";
+    if (lower.includes("css") || lower.includes("html") || lower.includes("frontend") || lower.includes("backend") || lower.includes("api")) return "Web Development";
     return "AI Full Stack Development";
 }
 
-/**
- * Intelligent, fact-grounded fallback generator that generates platform-specific
- * copy anchored strictly in the user's supplied text when AI APIs are unreachable.
- */
 function generateGroundedFallback(rawCaption: string, mediaType: string): AIContentResult {
     const clean = (rawCaption || "").trim();
     const pillar = detectPillarFromContext(clean);
 
-    // Extract core keywords
+    // Extract meaningful words from the raw caption for topic-aware content
     const words = clean
         .replace(/[^a-zA-Z0-9\s]/g, " ")
         .split(/\s+/)
-        .filter((w) => w.length > 3)
-        .slice(0, 5);
+        .filter((w) => w.length > 2)
+        .slice(0, 10);
 
-    const kw1 = words[0] ? words[0].charAt(0).toUpperCase() + words[0].slice(1) : "AI Full Stack";
-    const kw2 = words[1] ? words[1].charAt(0).toUpperCase() + words[1].slice(1) : "Development";
-    const primaryKw = `${kw1} ${kw2}`.trim();
-
-    // YouTube Content
-    let ytTitle = clean.length > 0 && clean.length <= 75
-        ? `${clean} | Full Guide`
-        : `Building a Real-World ${kw1} App: Architecture & Code Walkthrough`;
+    // Build a topic-aware title from the actual caption
+    let ytTitle: string;
+    if (clean.length > 10 && clean.length <= 70) {
+        // Caption is already a reasonable title length — capitalize and use it
+        ytTitle = clean.charAt(0).toUpperCase() + clean.slice(1);
+    } else if (clean.length > 70) {
+        // Shorten but keep the meaning
+        ytTitle = clean.slice(0, 65).replace(/\s+\S*$/, "").trim();
+    } else {
+        // Very short or empty — detect topic and build contextual title
+        const topicTitles: Record<string, string> = {
+            "BCA Placement": "BCA Students: Skills College Won't Teach You 🚨",
+            "Software Career Education": "Skills Every Student Needs But Colleges Don't Teach",
+            "AI Full Stack Development": "Build Real AI Apps — Complete Developer Guide",
+            "Generative AI & LLMs": "AI Tools Every Developer Should Know in 2025",
+            "RAG & LangGraph": "RAG Tutorial — Build AI That Uses Your Own Data",
+            "AI Agents": "AI Agents Explained — Build Your First Agent",
+            "Web Development": "Web Development Skills That Actually Get You Hired",
+            "Coding Tutorial": "Coding Tutorial for Beginners — Start Here",
+            "Project Showcase": "Real Project Demo — What I Built and How",
+            "Developer Journey": "My Developer Journey — Lessons I Wish I Knew Earlier",
+            "Freelancing & Clients": "Freelancing Guide — How to Get Your First Client",
+        };
+        ytTitle = topicTitles[pillar] ?? `${words.slice(0, 4).join(" ")} — Complete Guide`;
+    }
 
     if (ytTitle.length > YOUTUBE_TITLE_MAX) {
         ytTitle = ytTitle.slice(0, YOUTUBE_TITLE_MAX).replace(/\s+\S*$/, "").trim();
     }
 
-    const ytDesc = clean
-        ? `${clean}\n\n` +
-          `In this ${mediaType}, we break down the practical architecture, lessons learned, and implementation details.\n\n` +
-          `▶ 01: Core architecture & tech stack overview\n` +
-          `▶ 02: Step-by-step implementation breakdown\n` +
-          `▶ 03: Common pitfalls & production best practices\n\n` +
-          `💡 Subscribe for weekly practical tutorials on AI Full Stack, RAG, and Agent development.\n` +
-          `Keywords: ${primaryKw.toLowerCase()}, AI development, Next.js, TypeScript, full stack roadmap`
-        : `Practical engineering breakdown covering ${pillar.toLowerCase()} architecture, tools, and real-world implementation.\n\n` +
-          `▶ 01: Complete architectural breakdown\n` +
-          `▶ 02: Hands-on code walkthrough & setup\n` +
-          `▶ 03: Key takeaways for developers & students\n\n` +
-          `💡 Subscribe for weekly practical tutorials on AI Full Stack, RAG, and Agent development.\n` +
-          `Keywords: full stack development, software engineering, AI roadmap, developer tutorial`;
+    // Build topic-aware description from actual content
+    const topicPhrase = clean || pillar;
+    const ytDesc =
+        `${topicPhrase} — everything you need to know. 🚀\n\n` +
+        `In this ${mediaType}:\n` +
+        `▶ The real problem and why it matters\n` +
+        `▶ What most people get wrong\n` +
+        `▶ Practical steps you can take today\n` +
+        `▶ Resources and next steps\n\n` +
+        `🔔 Follow for more content like this.\n\n` +
+        `Comment "ROADMAP" and I'll send you helpful resources in DM. 📩\n\n` +
+        `Keywords: ${words.slice(0, 5).join(", ").toLowerCase()}`;
 
+    // Topic-aware hashtags
+    const topicTag = pillar.toLowerCase().replace(/[^a-z0-9]/g, "");
     const ytTags = [
-        "aifullstack", "webdev", "nextjs", "typescript", "softwareengineer",
-        "developer", "coding", "fullstackdeveloper", "rag", "langchain",
-        "reactjs", "nodejs", "programming", "learntocode", "techcareer",
-        "bca", "aiagents", "generativeai", "projectshowcase", "buildinpublic",
+        "coding", "programming", "students",
+        topicTag, "career", "skills", "education",
+        "placement", "developer", "technology",
+        "techcareer", "learntocode", "india",
+        "bcaplacement", "studentlife",
     ];
 
-    // Instagram Reel Content
-    const igTitle = `${kw1} in 60 Seconds ⚡`;
-    const igDesc = `Here's what you need to know about ${primaryKw}:\n\n` +
-        `1️⃣ Focus on practical architecture before writing code\n` +
-        `2️⃣ Choose modern tools (Next.js, TypeScript, Vector DBs)\n` +
-        `3️⃣ Ship real projects that solve genuine problems\n\n` +
-        `Save this reel for your next project & follow for more developer breakdowns! 💻✨`;
+    const igTitle = clean.length > 5
+        ? `${clean.split(/\s+/).slice(0, 5).join(" ")} 🔥`
+        : `${pillar} — Must Watch 🔥`;
+    const igDesc =
+        `${topicPhrase} 👇\n\n` +
+        `Most people don't know this about ${pillar.toLowerCase()} 🚨\n\n` +
+        `✅ The truth nobody tells you\n` +
+        `✅ What you actually need to focus on\n` +
+        `✅ Practical steps to start today\n\n` +
+        `Save this for later! 💾 Follow for more 👇`;
+
     const igTags = [
-        "developer", "codinglife", "fullstackdeveloper", "webdevelopment", "softwareengineering",
-        "techstudent", "computerscience", "buildinpublic", "learntocode", "nextjs",
-        "javascript", "typescript", "aifullstack", "programmer", "codenewbie",
-        "devcommunity", "developerjourney", "techreels", "codingtips", "bca",
+        "students", "coding", "programming", "tech",
+        "career", "developer", "education", "skills", "learning", "motivation",
+        topicTag, "placement", "college", "india", "studentlife", "techcareer",
+        "careeradvice", "codinglife", "learntocode", "bcaplacement",
     ];
 
-    // LinkedIn Content
-    const liTitle = `Building Production ${kw1}: Practical Architecture & Insights`;
-    const liDesc = `When building real-world ${pillar.toLowerCase()} applications, theory only takes you so far.\n\n` +
-        `Here are 3 fundamental engineering principles I rely on:\n\n` +
-        `• Architecture First: Define state models and data boundaries before touching APIs.\n` +
-        `• Type Safety: TypeScript across full stack eliminates an entire category of runtime bugs.\n` +
-        `• Pragmatic Tooling: Use battle-tested frameworks like Next.js and Node.js for maintainability.\n\n` +
-        `For fellow developers and students: What is the most critical lesson you've learned while building full-stack projects?\n\n` +
-        `Would love to hear your perspectives in the comments below.`;
-    const liTags = ["softwareengineering", "webdevelopment", "artificialintelligence", "fullstack", "programming"];
+    const liTitle = `Here's what nobody tells you about ${pillar.toLowerCase()}.`;
+    const liDesc =
+        `${topicPhrase}\n\n` +
+        `This is something most people learn too late.\n\n` +
+        `After spending time in this space, here's what I've observed:\n\n` +
+        `→ The gap between what's taught and what's needed is real\n` +
+        `→ Self-learning is no longer optional\n` +
+        `→ Practical experience beats theoretical knowledge every time\n\n` +
+        `What's your experience? I'd love to hear from you. 👇`;
+
+    const liTags = ["careergrowth", "education", topicTag, "students", "skills"];
 
     const analysis: AIContentAnalysis = {
         pillar,
-        targetAudience: "Aspiring developers, BCA/CS students, and full-stack engineers",
-        primaryKeyword: primaryKw,
-        secondaryKeywords: [kw1, kw2, "TypeScript", "Next.js", "Full Stack"],
+        targetAudience: "Students, developers, and career-focused learners",
+        primaryKeyword: words.slice(0, 3).join(" ") || pillar,
+        secondaryKeywords: words.slice(3, 7).concat([pillar.toLowerCase()]),
         contentObjective: "education",
         hookType: "problem_solution",
         ctaType: "discussion",
@@ -260,37 +302,39 @@ export async function generateContent(
 ): Promise<AIContentResult> {
     const hasCloudKey = !!(env.GEMINI_API_KEY || env.MISTRAL_API_KEY);
     if (!hasCloudKey) {
-        logger.info("No GEMINI_API_KEY or MISTRAL_API_KEY set — using grounded developer content engine");
+        logger.info("No AI API key configured — using grounded SEO fallback engine");
         return generateGroundedFallback(rawCaption, mediaType);
     }
 
     const provider = getProvider();
+    logger.debug("AI generate request", { provider: provider.name, mediaType, platformCount: platforms.length });
 
-    logger.debug("AI generate request", {
-        provider: provider.name,
-        mediaType,
-        platformCount: platforms.length,
-    });
-
-    const prompt = `TASK: Generate authentic, high-converting content for Rahul Kumar's developer channels.
-
-MEDIA TYPE: ${mediaType}
-TARGET PLATFORMS: ${platforms.join(", ")}
-
-CREATOR CONTEXT / RAW CAPTION:
-"""${rawCaption || "Building full-stack AI applications and developer project walkthroughs."}"""
-
-INSTRUCTIONS:
-1. Analyze topic, content pillar, and target developer audience.
-2. Formulate grounded, high-relevance copy for YouTube, Instagram Reels, and LinkedIn.
-3. YouTube title target: ≤${YOUTUBE_TITLE_TARGET} chars (hard limit: 100 chars).
-4. Return ONLY the structured JSON object matching the specification.`;
+    const prompt =
+        `TASK: Generate SEO-optimized content for a creator's social media channels.\n\n` +
+        `MEDIA TYPE: ${mediaType}\n` +
+        `TARGET PLATFORMS: ${platforms.join(", ")}\n\n` +
+        `⚠️ CRITICAL: The creator's content idea below is THE TOPIC. Your output MUST be about THIS EXACT TOPIC.\n` +
+        `Do NOT generate generic "build an app" content if the topic is about something else.\n` +
+        `Read the content idea carefully and generate titles/descriptions that match it precisely.\n\n` +
+        `CREATOR'S CONTENT IDEA / RAW CAPTION:\n"""${rawCaption || "Tech content for developers and students"}"""\n\n` +
+        `MANDATORY STEPS:\n` +
+        `1. UNDERSTAND the creator's actual topic — what is this content REALLY about?\n` +
+        `2. Extract the PRIMARY keyword that someone would search to find THIS specific content\n` +
+        `3. Identify 3-5 secondary keywords related to THIS topic\n` +
+        `4. Determine search intent (learn, discover, solve, get inspired?)\n` +
+        `5. YouTube title: About THIS TOPIC, keyword front-loaded, 50-70 chars, high CTR, can use Hinglish for Indian audience\n` +
+        `6. YouTube description: About THIS TOPIC, hook + value bullets + CTA like "Comment ROADMAP" for engagement\n` +
+        `7. Instagram hook: About THIS TOPIC, stops scroll in 2 seconds\n` +
+        `8. LinkedIn hook: About THIS TOPIC, makes professionals tap "see more"\n` +
+        `9. Tiered hashtags RELEVANT TO THIS TOPIC\n` +
+        `10. SEO score for each platform (0-100)\n\n` +
+        `Return ONLY the structured JSON object. Zero text outside JSON.`;
 
     try {
         const result = await callAIWithRetry(prompt, STRATEGIC_SYSTEM_PROMPT);
         return enforceYoutubeTitleLimit(result);
     } catch (err) {
-        logger.warn("AI generation failed or timed out — using grounded developer fallback", {
+        logger.warn("AI generation failed — using grounded SEO fallback", {
             provider: provider.name,
             error: err instanceof Error ? err.message : String(err),
         });
@@ -306,37 +350,34 @@ export async function enhanceContent(
 ): Promise<AIContentResult> {
     const hasCloudKey = !!(env.GEMINI_API_KEY || env.MISTRAL_API_KEY);
     if (!hasCloudKey) {
-        logger.info("No cloud AI key set — enhancing via grounded engine");
+        logger.info("No cloud AI key — enhancing via grounded SEO engine");
         return generateGroundedFallback(`${title}\n\n${description}`, "video");
     }
 
     const provider = getProvider();
+    logger.debug("AI enhance request", { provider: provider.name, platformCount: platforms.length });
 
-    logger.debug("AI enhance request", {
-        provider: provider.name,
-        platformCount: platforms.length,
-    });
-
-    const prompt = `TASK: Enhance and optimize this developer post across YouTube, Instagram, and LinkedIn.
-
-CURRENT CONTENT:
-Title: """${title}"""
-Description: """${description}"""
-Hashtags: ${hashtags.join(", ")}
-
-TARGET PLATFORMS: ${platforms.join(", ")}
-
-INSTRUCTIONS:
-1. Elevate clarity, sharpen hooks, and ensure technical credibility.
-2. Tailor platform-specific output for YouTube, Instagram, and LinkedIn.
-3. Keep YouTube title ≤${YOUTUBE_TITLE_TARGET} chars (hard limit: 100).
-4. Return ONLY valid raw JSON matching the required schema.`;
+    const prompt =
+        `TASK: Upgrade this developer content to maximum SEO score across all platforms.\n\n` +
+        `CURRENT DRAFT TO UPGRADE:\n` +
+        `Title: """${title}"""\n` +
+        `Description: """${description}"""\n` +
+        `Hashtags: ${hashtags.join(", ")}\n` +
+        `TARGET PLATFORMS: ${platforms.join(", ")}\n\n` +
+        `SEO UPGRADE CHECKLIST:\n` +
+        `1. YouTube Title: Primary keyword in first 3-4 words? 50-70 chars? CTR power words?\n` +
+        `2. YouTube Description: Line 1 with keyword + promise? Bullets with secondary keywords? Keyword footer? Timestamps?\n` +
+        `3. Instagram: Genuine scroll-stopping hook? Value body + save CTA? Tiered hashtags?\n` +
+        `4. LinkedIn: Line 1 creates curiosity? Strategic white space? Discussion question at end?\n` +
+        `5. All hashtag tiers covered?\n` +
+        `6. SEO score (0-100) for each platform after upgrade.\n\n` +
+        `Return ONLY valid raw JSON matching the required schema.`;
 
     try {
         const result = await callAIWithRetry(prompt, ENHANCE_SYSTEM_PROMPT);
         return enforceYoutubeTitleLimit(result);
     } catch (err) {
-        logger.warn("AI enhance failed — returning grounded fallback", {
+        logger.warn("AI enhance failed — returning grounded SEO fallback", {
             provider: provider.name,
             error: err instanceof Error ? err.message : String(err),
         });
@@ -352,19 +393,19 @@ async function callAIWithRetry(
 ): Promise<AIContentResult> {
     const provider = getProvider();
 
-    // First attempt
     const raw = await provider.generate(prompt, systemPrompt, true);
     const parsed = tryParseAIResponse(raw);
     if (parsed) return parsed;
 
-    // Retry once with stricter formatting instruction
-    logger.warn("AI response was not valid JSON on first attempt — retrying with stricter prompt", {
-        provider: provider.name,
-    });
+    logger.warn("AI response was not valid JSON — retrying with stricter instruction", { provider: provider.name });
 
-    const retryPrompt = `${prompt}
-
-CRITICAL: Your previous output failed JSON parsing. Return ONLY a valid raw JSON object. Do not include markdown \`\`\` fences, and do not include preamble.`;
+    const retryPrompt =
+        `${prompt}\n\n` +
+        `CRITICAL: Your previous response failed JSON validation.\n` +
+        `- Return ONLY a raw JSON object\n` +
+        `- NO markdown fences (no triple backticks)\n` +
+        `- NO preamble text or explanation\n` +
+        `- Start with { and end with }`;
 
     const retryRaw = await provider.generate(retryPrompt, systemPrompt, true);
     const retryParsed = tryParseAIResponse(retryRaw);
@@ -388,9 +429,7 @@ async function enforceYoutubeTitleLimit(result: AIContentResult): Promise<AICont
         ? result.platforms.youtube.title
         : result.title;
 
-    logger.warn("Title exceeds 100 chars — shortening", {
-        titleLength: titleToShorten.length,
-    });
+    logger.warn("YouTube title exceeds 100 chars — shortening with AI", { titleLength: titleToShorten.length });
 
     let shortened = titleToShorten.slice(0, YOUTUBE_TITLE_TARGET).replace(/\s+\S*$/, "").trim();
 
@@ -398,7 +437,7 @@ async function enforceYoutubeTitleLimit(result: AIContentResult): Promise<AICont
         const provider = getProvider();
         const aiShortened = await provider.generate(
             SHORTEN_TITLE_PROMPT(titleToShorten),
-            "You are a concise technical editor. Return ONLY the shortened title text.",
+            "You are a YouTube SEO expert. Return ONLY the shortened title text, nothing else.",
             false
         );
         const cleanShort = aiShortened.replace(/^["']|["']$/g, "").trim();
@@ -414,15 +453,12 @@ async function enforceYoutubeTitleLimit(result: AIContentResult): Promise<AICont
         title: shortened,
         platforms: {
             ...result.platforms,
-            youtube: {
-                ...result.platforms.youtube,
-                title: shortened,
-            },
+            youtube: { ...result.platforms.youtube, title: shortened },
         },
     };
 }
 
-// ─── JSON Parsing Helper ──────────────────────────────────────────────────────
+// ─── JSON Parsing Helpers ──────────────────────────────────────────────────────
 
 function cleanHashtags(raw: unknown, defaultTags: string[]): string[] {
     if (Array.isArray(raw)) {
@@ -447,9 +483,8 @@ function extractBlock(
     fallbackDesc: string,
     fallbackTags: string[]
 ): PlatformContent {
-    if (!block) {
-        return { title: fallbackTitle, description: fallbackDesc, hashtags: fallbackTags };
-    }
+    if (!block) return { title: fallbackTitle, description: fallbackDesc, hashtags: fallbackTags };
+
     const target = (Array.isArray(block) ? block[0] : block) as Record<string, unknown> | null;
     if (typeof target !== "object" || target === null) {
         return { title: fallbackTitle, description: fallbackDesc, hashtags: fallbackTags };
@@ -472,8 +507,9 @@ function extractBlock(
                     : fallbackDesc;
 
     const hashtags = cleanHashtags(target.hashtags || target.tags || target.keywords, fallbackTags);
+    const seoScore = typeof target.seoScore === "number" ? target.seoScore : undefined;
 
-    return { title, description, hashtags };
+    return { title, description, hashtags, ...(seoScore !== undefined ? { seoScore } : {}) };
 }
 
 function tryParseAIResponse(raw: string): AIContentResult | null {
@@ -486,40 +522,44 @@ function tryParseAIResponse(raw: string): AIContentResult | null {
         const jsonMatch = stripped.match(/\{[\s\S]*\}/);
         if (!jsonMatch) return null;
 
-        // Clean trailing commas before parsing
         const cleanedJsonStr = jsonMatch[0].replace(/,\s*([}\]])/g, "$1");
         const json = JSON.parse(cleanedJsonStr) as Record<string, unknown>;
 
-        const defaultYtTitle = typeof json.title === "string" ? json.title : "AI Full Stack Application Architecture";
-        const defaultYtDesc = typeof json.description === "string" ? json.description : "Practical breakdown of real-world developer architecture and implementation.";
+        const defaultYtTitle = typeof json.title === "string" ? json.title : "Content That Matters — Watch Now";
+        const defaultYtDesc = typeof json.description === "string" ? json.description : "Complete breakdown of the topic with practical insights and actionable takeaways.";
         const defaultYtTags = cleanHashtags(json.hashtags, [
-            "aifullstack", "webdev", "nextjs", "typescript", "softwareengineer",
-            "developer", "coding", "fullstackdeveloper", "rag", "langchain",
+            "coding", "programming", "tech",
+            "education", "students", "career", "skills",
+            "developer", "learning", "india",
         ]);
 
         const yt = extractBlock(json.youtube, defaultYtTitle, defaultYtDesc, defaultYtTags);
         const ig = extractBlock(json.instagram, yt.title, yt.description, yt.hashtags);
         const li = extractBlock(json.linkedin, yt.title, yt.description, yt.hashtags.slice(0, 5));
 
-        // Strategy & analysis
         const rawAnalysis = (json.analysis && typeof json.analysis === "object" ? json.analysis : {}) as Record<string, unknown>;
         const detectedPillar = detectPillarFromContext(`${yt.title} ${yt.description}`);
+
         const analysis: AIContentAnalysis = {
             pillar: (typeof rawAnalysis.pillar === "string" && CONTENT_PILLARS.includes(rawAnalysis.pillar as ContentPillar))
                 ? (rawAnalysis.pillar as ContentPillar)
                 : detectedPillar,
-            targetAudience: typeof rawAnalysis.targetAudience === "string" ? rawAnalysis.targetAudience : "Developers, tech students, and engineers",
-            primaryKeyword: typeof rawAnalysis.primaryKeyword === "string" ? rawAnalysis.primaryKeyword : "AI Full Stack Development",
+            targetAudience: typeof rawAnalysis.targetAudience === "string"
+                ? rawAnalysis.targetAudience
+                : "BCA/CS students and developers building AI projects",
+            primaryKeyword: typeof rawAnalysis.primaryKeyword === "string"
+                ? rawAnalysis.primaryKeyword
+                : "AI Full Stack Development",
             secondaryKeywords: Array.isArray(rawAnalysis.secondaryKeywords)
                 ? rawAnalysis.secondaryKeywords.map(String)
-                : ["Next.js", "TypeScript", "LangChain"],
+                : ["Next.js", "TypeScript", "LangChain", "AI Agents", "Full Stack"],
             contentObjective: (["education", "project_demo", "career_growth", "authority"].includes(rawAnalysis.contentObjective as string))
                 ? (rawAnalysis.contentObjective as "education" | "project_demo" | "career_growth" | "authority")
                 : "education",
-            hookType: (["problem_solution", "technical_curiosity", "case_study", "contrarian"].includes(rawAnalysis.hookType as string))
+            hookType: (["problem_solution", "technical_curiosity", "case_study", "contrarian", "how_to"].includes(rawAnalysis.hookType as string))
                 ? (rawAnalysis.hookType as "problem_solution" | "technical_curiosity" | "case_study" | "contrarian")
                 : "problem_solution",
-            ctaType: (["discussion", "follow", "github_repo", "resource"].includes(rawAnalysis.ctaType as string))
+            ctaType: (["discussion", "follow", "github_repo", "resource", "save"].includes(rawAnalysis.ctaType as string))
                 ? (rawAnalysis.ctaType as "discussion" | "follow" | "github_repo" | "resource")
                 : "discussion",
         };
@@ -529,11 +569,7 @@ function tryParseAIResponse(raw: string): AIContentResult | null {
             description: yt.description,
             hashtags: yt.hashtags,
             analysis,
-            platforms: {
-                youtube: yt,
-                instagram: ig,
-                linkedin: li,
-            },
+            platforms: { youtube: yt, instagram: ig, linkedin: li },
         };
     } catch {
         return null;

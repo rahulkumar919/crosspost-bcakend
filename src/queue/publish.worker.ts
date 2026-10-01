@@ -23,16 +23,35 @@ function toUserError(err: unknown, platform: Platform): string {
         return err.message;
     }
     if (typeof err === "object" && err !== null && "response" in err) {
-        const status = (err as { response?: { status?: number } }).response?.status;
+        const axErr = err as { response?: { status?: number; data?: unknown }; message?: string };
+        const status = axErr.response?.status;
+
+        // Log the full response body to help debug
+        logger.error(`Platform ${platform} HTTP error detail`, {
+            status,
+            responseData: JSON.stringify(axErr.response?.data),
+            message: axErr.message,
+        });
+
         if (status === 401 || status === 403) {
-            return `Your ${platform} account connection has expired. Please reconnect.`;
+            return `Your ${platform} account connection has expired or lacks permissions. Please reconnect.`;
+        }
+        if (status === 400) {
+            const data = axErr.response?.data as Record<string, unknown> | undefined;
+            const apiMsg = (data?.error as Record<string, unknown> | undefined)?.message as string | undefined;
+            return apiMsg
+                ? `${platform} rejected the upload: ${apiMsg}`
+                : `${platform} rejected the upload request. Check your content for invalid characters.`;
         }
         if (status === 429) {
-            return `${platform} rate limit reached. Please try again later.`;
+            return `${platform} rate limit reached. Please try again in a few minutes.`;
         }
         if (status && status >= 500) {
             return `${platform} is experiencing issues. Please try again later.`;
         }
+    }
+    if (err instanceof Error) {
+        logger.error(`Platform ${platform} non-HTTP error`, { message: err.message, stack: err.stack });
     }
     return `Publishing to ${platform} failed. Please try again.`;
 }

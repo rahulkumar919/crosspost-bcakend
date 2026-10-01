@@ -169,55 +169,131 @@ export const youtubeAdapter: PlatformPublisher = {
         // Hashtags as YouTube tags (max 500 chars total, max 30 tags)
         const tags = postTarget.final_hashtags.slice(0, 30);
 
-        // Step 1: Initiate resumable upload session
-        const initRes = await axios.post(
-            `${YOUTUBE_UPLOAD_API}?uploadType=resumable&part=snippet,status`,
-            {
-                snippet: {
-                    title: postTarget.final_title.slice(0, 100),       // YouTube max title = 100 chars
-                    description: postTarget.final_description.slice(0, 5000),
-                    tags,
-                    categoryId: "22",   // "People & Blogs" — safe default
-                },
-                status: {
-                    privacyStatus: "public",
-                    selfDeclaredMadeForKids: false,
-                },
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/json",
-                    "X-Upload-Content-Type": "video/*",
-                },
-            }
-        );
+        // ── Step 1: Fetch video binary first so we know the real byte size ────
+        // YouTube REQUIRES the actual Content-Length in the session initiation
+        // request — sending 0 causes a 400 Bad Request.
+        logger.info("YouTube: downloading video from CDN", { mediaUrl, accountId: account.id });
+        let videoBuffer: Buffer;
+        try {
+            const videoRes = await axios.get<ArrayBuffer>(mediaUrl, {
+                responseType: "arraybuffer",
+                timeout: 300_000, // 5 min for large videos
+            });
+            videoBuffer = Buffer.from(videoRes.data);
+            logger.info("YouTube: video downloaded", { bytes: videoBuffer.length });
+        } catch (dlErr) {
+            logger.error("YouTube: failed to download video from CDN", {
+                mediaUrl,
+                error: dlErr instanceof Error ? dlErr.message : String(dlErr),
+            });
+            return {
+                success: false,
+                errorMessage: "Failed to download video for YouTube upload. Please try again.",
+            };
+        }
 
-        const uploadUrl = initRes.headers["location"] as string;
+        // Detect MIME type from buffer magic bytes (most videos from Cloudinary are mp4)
+        const mimeType = detectVideoMimeType(videoBuffer);
+
+        // ── Step 2: Initiate resumable upload session ─────────────────────────
+        let uploadUrl: string;
+        try {
+            const initRes = await axios.post(
+                `${YOUTUBE_UPLOAD_API}?uploadType=resumable&part=snippet,status`,
+                {
+                    snippet: {
+                        title: postTarget.final_title.slice(0, 100),
+                        description: postTarget.final_description.slice(0, 5000),
+                        tags,
+                        categoryId: "28", // Science & Technology
+                    },
+                    status: {
+                        privacyStatus: "public",
+                        selfDeclaredMadeForKids: false,
+                    },
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                        // Must be the actual MIME type — wildcard "video/*" is rejected
+                        "X-Upload-Content-Type": mimeType,
+                        // Must be the actual byte size — 0 is rejected with HTTP 400
+                        "X-Upload-Content-Length": String(videoBuffer.length),
+                    },
+                }
+            );
+            uploadUrl = initRes.headers["location"] as string;
+        } catch (initErr) {
+            if (axios.isAxiosError(initErr)) {
+                const status = initErr.response?.status;
+                const data = initErr.response?.data as { error?: { message?: string; status?: string } } | undefined;
+                const errMsg = data?.error?.message ?? "Unknown error";
+                const errStatus = data?.error?.status ?? "";
+
+                logger.error("YouTube: session initiation failed", {
+                    status,
+                    googleError: errMsg,
+                    googleStatus: errStatus,
+                    accountId: account.id,
+                });
+
+                if (status === 401) {
+                    throw new AppError(
+                        "YouTube authentication failed. Please reconnect your YouTube account.",
+                        401, "YT_AUTH_FAILED"
+                    );
+                }
+                if (status === 403) {
+                    // Could be quota exceeded OR API not enabled OR insufficient permissions
+                    if (errStatus === "FORBIDDEN" || errMsg.toLowerCase().includes("quota")) {
+                        throw new AppError(
+                            "YouTube API quota exceeded or not enabled. Check Google Cloud Console → YouTube Data API v3.",
+                            403, "YT_QUOTA_EXCEEDED"
+                        );
+                    }
+                    throw new AppError(
+                        `YouTube rejected the upload (403): ${errMsg}. Ensure your Google account has a YouTube channel and the API is enabled.`,
+                        403, "YT_FORBIDDEN"
+                    );
+                }
+                if (status === 400) {
+                    throw new AppError(
+                        `YouTube rejected the upload request: ${errMsg}`,
+                        400, "YT_INVALID_REQUEST"
+                    );
+                }
+            }
+            throw initErr;
+        }
+
         if (!uploadUrl) {
             throw new AppError("YouTube did not return an upload session URL.", 502, "YT_NO_UPLOAD_URL");
         }
 
-        // Step 2: Fetch video binary from Cloudinary CDN and stream to YouTube
-        const videoRes = await axios.get<ArrayBuffer>(mediaUrl, {
-            responseType: "arraybuffer",
-            timeout: 120_000, // 2 min for large videos
-        });
-        const videoBuffer = Buffer.from(videoRes.data);
-
-        // Step 3: Upload binary to resumable session URL
+        // ── Step 3: Upload binary to the resumable session URL ────────────────
         const uploadRes = await axios.put<{ id: string }>(uploadUrl, videoBuffer, {
             headers: {
-                "Content-Type": "video/*",
-                "Content-Length": videoBuffer.length,
+                // Must be a concrete MIME type, not a wildcard
+                "Content-Type": mimeType,
+                "Content-Length": String(videoBuffer.length),
+                // Authorization is required — the session URL is not public
+                Authorization: `Bearer ${accessToken}`,
             },
-            timeout: 180_000, // 3 min upload
+            timeout: 300_000, // 5 min for large files
             maxContentLength: Infinity,
             maxBodyLength: Infinity,
         });
 
-        const videoId = uploadRes.data.id;
-        logger.info("YouTube video published", { accountId: account.id, videoId });
+        const videoId = uploadRes.data?.id;
+        if (!videoId) {
+            throw new AppError(
+                "YouTube upload completed but no video ID was returned.",
+                502, "YT_NO_VIDEO_ID"
+            );
+        }
+
+        logger.info("YouTube video published successfully", { accountId: account.id, videoId });
 
         return {
             success: true,
@@ -225,6 +301,29 @@ export const youtubeAdapter: PlatformPublisher = {
         };
     },
 };
+
+/**
+ * Detect video MIME type from magic bytes.
+ * Cloudinary delivers mp4 by default; mov/webm/avi are also handled.
+ */
+function detectVideoMimeType(buffer: Buffer): string {
+    // MP4 / M4V — ftyp box at offset 4
+    if (buffer.length >= 12) {
+        const ftyp = buffer.toString("ascii", 4, 8);
+        if (ftyp === "ftyp") return "video/mp4";
+    }
+    // WebM — starts with 0x1A 0x45 0xDF 0xA3
+    if (buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) {
+        return "video/webm";
+    }
+    // MOV / QuickTime
+    if (buffer.length >= 8) {
+        const moov = buffer.toString("ascii", 4, 8);
+        if (moov === "moov" || moov === "wide" || moov === "mdat") return "video/quicktime";
+    }
+    // Default to mp4 (Cloudinary delivers mp4 for almost all video formats)
+    return "video/mp4";
+}
 
 async function getValidAccessToken(account: ConnectedAccount): Promise<string> {
     const validAccount = await youtubeAdapter.refreshTokenIfNeeded(account);
