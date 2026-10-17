@@ -108,3 +108,33 @@ export async function disconnectAccount(
         next(err);
     }
 }
+
+export async function getInstagramMedia(
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> {
+    try {
+        const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+        const cursor = (req.query.cursor as string) || undefined;
+        const page = await accountsService.getInstagramMedia(req.user!.id, limit, cursor);
+        res.json(page);           // { items, next_cursor }
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function getInstagramMediaById(
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> {
+    try {
+        const { mediaId } = req.params;
+        if (!mediaId) { res.status(400).json({ error: "mediaId is required" }); return; }
+        const item = await accountsService.getInstagramMediaById(req.user!.id, mediaId);
+        res.json(item);
+    } catch (err) {
+        next(err);
+    }
+}

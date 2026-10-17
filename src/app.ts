@@ -44,7 +44,15 @@ app.use(
 );
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "1mb" }));
+// For Meta webhook routes (/webhooks/*) we capture the raw request body so the
+// HMAC-SHA256 signature can be verified against the original bytes Meta signed.
+// The raw buffer is attached as req.rawBody (declared in src/types/express.d.ts).
+app.use(express.json({
+    limit: "1mb",
+    verify: (req: express.Request, _res: express.Response, buf: Buffer) => {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Global rate limit ────────────────────────────────────────────────────────

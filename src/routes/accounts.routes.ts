@@ -7,6 +7,12 @@ const router = Router();
 // GET  /accounts  — list all connected platforms for the authenticated user
 router.get("/", requireAuth, accountsController.getAccounts);
 
+// GET  /accounts/instagram/media  — paginated list (limit, cursor query params)
+router.get("/instagram/media", requireAuth, accountsController.getInstagramMedia);
+
+// GET  /accounts/instagram/media/:mediaId  — single post/reel detail (for card thumbnails)
+router.get("/instagram/media/:mediaId", requireAuth, accountsController.getInstagramMediaById);
+
 // GET  /accounts/connect/:platform  — redirects user to platform OAuth screen
 // Note: requireAuth reads from the Authorization header — the redirect must
 // include the JWT (the frontend appends it as ?token= or the user is already

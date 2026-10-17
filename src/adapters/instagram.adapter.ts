@@ -37,8 +37,17 @@ const IG_AUTH_URL = "https://api.instagram.com/oauth/authorize";
 const IG_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const IG_GRAPH_API = "https://graph.instagram.com";
 
-// Scopes for Instagram API with Instagram Login
-const SCOPES = "instagram_business_basic,instagram_business_content_publish";
+// Scopes for Instagram API with Instagram Login.
+// instagram_business_basic         — read profile, IG user ID (required base)
+// instagram_business_content_publish — publish media (existing feature)
+// instagram_business_messaging     — send DMs to users who've interacted (required for comment→DM automation)
+// instagram_manage_comments        — read + reply to comments (required for comment trigger + public reply)
+const SCOPES = [
+    "instagram_business_basic",
+    "instagram_business_content_publish",
+    "instagram_business_messaging",
+    "instagram_manage_comments",
+].join(",");
 
 // Mark expired if within 7 days of expiry (enough time to warn user)
 const EXPIRY_WARN_MS = 7 * 24 * 60 * 60 * 1000;

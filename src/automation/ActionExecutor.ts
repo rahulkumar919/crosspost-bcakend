@@ -11,10 +11,18 @@
  *   - ASSIGN_HUMAN         → set conversation.mode = HUMAN
  *   - TAG_CONVERSATION     → create/attach tag
  *   - PAUSE_AUTOMATION     → set conversation.mode = PAUSED
+ * 
+ * 
  */
+
 import { prisma } from "../config/db";
 import { logger } from "../lib/logger";
-import { sendInstagramDM, sendInstagramCommentReply } from "../adapters/instagram-messaging";
+import {
+    sendInstagramDM,
+    sendInstagramCommentReply,
+    sendInstagramPrivateReply,
+    interpolateMessage,
+} from "../adapters/instagram-messaging";
 import { sendWhatsAppMessage } from "../adapters/whatsapp.adapter";
 import { getConversationAIReply } from "./ConversationAIService";
 import type { NormalizedMessageEvent } from "./events/NormalizedEvent";
@@ -47,7 +55,7 @@ interface ActionLog {
 
 // Action config shapes
 interface SendMessageConfig { message: string }
-interface SendLinkConfig { message: string; buttonText: string; url: string }
+interface SendLinkConfig { message: string; buttonText: string; url: string; resource_url?: string }
 interface TagConfig { tagName: string; color?: string }
 
 // ─── Main Executor ────────────────────────────────────────────────────────────
@@ -70,8 +78,12 @@ export async function executeAutomationActions(
 
                 // ── Send text message ─────────────────────────────────────
                 case "SEND_MESSAGE": {
-                    const { message } = config as unknown as SendMessageConfig;
-                    const sentText = await sendOutbound(event, conversation, message, automation.id);
+                    const cfg = config as unknown as SendMessageConfig;
+                    // Interpolate template vars (e.g. {{resource_url}})
+                    const text = interpolateMessage(cfg.message, {
+                        resource_url: (config.resource_url as string) ?? "",
+                    });
+                    const sentText = await sendOutbound(event, conversation, text, automation.id);
                     actionLog = { type: action.type, success: true, sentText };
                     break;
                 }
@@ -82,31 +94,58 @@ export async function executeAutomationActions(
                         actionLog = { type: action.type, success: false, error: "Not an Instagram comment event" };
                         break;
                     }
-                    const { message } = config as unknown as SendMessageConfig;
+                    const cfg = config as unknown as SendMessageConfig;
+                    const text = interpolateMessage(cfg.message, {
+                        resource_url: (config.resource_url as string) ?? "",
+                    });
                     const account = await getInstagramAccount(event.accountId);
                     if (!account) throw new Error("Instagram account not found");
-                    await sendInstagramCommentReply(account, event.commentId, message);
-                    await storeOutboundMessage(conversation, message, automation.id);
-                    actionLog = { type: action.type, success: true, sentText: message };
+                    await sendInstagramCommentReply(account, event.commentId, text);
+                    await storeOutboundMessage(conversation, text, automation.id);
+                    actionLog = { type: action.type, success: true, sentText: text };
                     break;
                 }
 
                 // ── Private reply to a comment (sends DM) ────────────────
+                // When the event is an Instagram comment, use the private-reply
+                // endpoint (recipient.comment_id) which bypasses the 24-hour
+                // messaging window. For non-comment events, fall back to a
+                // regular DM (sendOutbound) which requires the window to be open.
                 case "SEND_PRIVATE_REPLY": {
-                    const { message } = config as unknown as SendMessageConfig;
-                    const sentText = await sendOutbound(event, conversation, message, automation.id);
-                    actionLog = { type: action.type, success: true, sentText };
+                    const cfg = config as unknown as SendMessageConfig;
+                    const text = interpolateMessage(cfg.message, {
+                        resource_url: (config.resource_url as string) ?? "",
+                    });
+
+                    if (event.channel === "INSTAGRAM" && event.isComment && event.commentId) {
+                        // Comment-to-DM: use comment_id recipient — no 24h window restriction
+                        const account = await getInstagramAccount(event.accountId);
+                        if (!account) throw new Error("Instagram account not found or expired");
+                        await sendInstagramPrivateReply(account, event.commentId, text);
+                        await storeOutboundMessage(conversation, text, automation.id);
+                        await prisma.conversation.update({
+                            where: { id: conversation.id },
+                            data: { last_message_at: new Date(), last_outbound_at: new Date() },
+                        });
+                        actionLog = { type: action.type, success: true, sentText: text };
+                    } else {
+                        // Non-comment context: regular DM (requires 24h window)
+                        const sentText = await sendOutbound(event, conversation, text, automation.id);
+                        actionLog = { type: action.type, success: true, sentText };
+                    }
                     break;
                 }
 
-                // ── Send link (text + URL, no fake buttons) ───────────────
+                // ── Send link (text + URL) ────────────────────────────────
                 case "SEND_LINK": {
-                    const { message, buttonText, url } = config as unknown as SendLinkConfig;
-                    // Validate URL — only https/http
-                    if (!/^https?:\/\//i.test(url ?? "")) {
-                        throw new Error(`Invalid URL in SEND_LINK action: ${url}`);
+                    const cfg = config as unknown as SendLinkConfig;
+                    if (!/^https?:\/\//i.test(cfg.url ?? "")) {
+                        throw new Error(`Invalid URL in SEND_LINK action: ${cfg.url}`);
                     }
-                    const linkText = `${message}\n\n${buttonText}: ${url}`.trim();
+                    const linkText = interpolateMessage(
+                        `${cfg.message}\n\n${cfg.buttonText}: ${cfg.url}`.trim(),
+                        { resource_url: cfg.resource_url ?? cfg.url ?? "" }
+                    );
                     const sentText = await sendOutbound(event, conversation, linkText, automation.id);
                     actionLog = { type: action.type, success: true, sentText };
                     break;
