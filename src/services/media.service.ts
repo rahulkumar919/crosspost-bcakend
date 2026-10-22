@@ -41,7 +41,7 @@ export async function uploadMedia(
     const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
     if (fileBuffer.length > maxBytes) {
         throw new AppError(
-            `File too large. Maximum size is ${isVideo ? "500 MB" : "50 MB"}.`,
+            `File too large. Maximum size is ${isVideo ? "100 MB" : "50 MB"}.`,
             413,
             "FILE_TOO_LARGE"
         );

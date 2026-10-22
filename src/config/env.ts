@@ -31,11 +31,11 @@ const envSchema = z.object({
     // ─── AI Provider ──────────────────────────────────────────────────────────
     // Switch between providers by changing AI_PROVIDER in .env.
     // Available: "gemini" | "mistral"
-    AI_PROVIDER: z.enum(["gemini", "mistral", "ollama"]).default("gemini"),
+    AI_PROVIDER: z.enum(["gemini", "mistral"]).default("gemini"),
 
     // ─── Gemini ───────────────────────────────────────────────────────────────
     GEMINI_API_KEY: z.string().default(""),
-    GEMINI_MODEL: z.string().default("gemini-1.5-flash"),
+    GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
 
     // ─── Mistral ──────────────────────────────────────────────────────────────
     // Get your key at: https://console.mistral.ai/

@@ -110,6 +110,16 @@ export function validateInstagramContent(
     let sanitizedDescription = description.trim();
     let sanitizedHashtags = [...hashtags];
 
+    // Hashtag count — trim FIRST so caption length calculation is accurate
+    if (sanitizedHashtags.length > IG_LIMITS.hashtags.max) {
+        errors.push({
+            field: "hashtags",
+            message: `Instagram allows a maximum of ${IG_LIMITS.hashtags.max} hashtags. The extra ${sanitizedHashtags.length - IG_LIMITS.hashtags.max} will be removed.`,
+            hard: false,
+        });
+        sanitizedHashtags = sanitizedHashtags.slice(0, IG_LIMITS.hashtags.max);
+    }
+
     // Caption (description + hashtags combined) — HARD limit
     const hashtagStr = sanitizedHashtags.map((h) => `#${h}`).join(" ");
     const combined = `${sanitizedDescription}\n\n${hashtagStr}`;
@@ -125,17 +135,29 @@ export function validateInstagramContent(
         const maxDescLen = IG_LIMITS.caption.max - hashtagPart.length;
         if (maxDescLen > 0) {
             sanitizedDescription = sanitizedDescription.slice(0, maxDescLen).trim();
+        } else {
+            // Hashtags alone exceed the limit — trim hashtags further to fit
+            sanitizedDescription = "";
+            const availableForHashtags = IG_LIMITS.caption.max;
+            let trimmedHashtags: string[] = [];
+            let runningLength = 0;
+            for (const h of sanitizedHashtags) {
+                const tagStr = `#${h}`;
+                const needed = runningLength === 0 ? tagStr.length : tagStr.length + 1; // +1 for space
+                if (runningLength + needed <= availableForHashtags) {
+                    trimmedHashtags.push(h);
+                    runningLength += needed;
+                } else {
+                    break;
+                }
+            }
+            sanitizedHashtags = trimmedHashtags;
+            errors.push({
+                field: "hashtags",
+                message: "Hashtags alone exceed Instagram's 2200-character limit. Some were removed.",
+                hard: false,
+            });
         }
-    }
-
-    // Hashtag count
-    if (sanitizedHashtags.length > IG_LIMITS.hashtags.max) {
-        errors.push({
-            field: "hashtags",
-            message: `Instagram allows a maximum of ${IG_LIMITS.hashtags.max} hashtags. The extra ${sanitizedHashtags.length - IG_LIMITS.hashtags.max} will be removed.`,
-            hard: false,
-        });
-        sanitizedHashtags = sanitizedHashtags.slice(0, IG_LIMITS.hashtags.max);
     }
 
     return {
