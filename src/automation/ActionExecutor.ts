@@ -103,6 +103,10 @@ export async function executeAutomationActions(
                     if (!account) throw new Error("Instagram account not found");
                     await sendInstagramCommentReply(account, event.commentId, text);
                     await storeOutboundMessage(conversation, text, automation.id);
+                    await prisma.conversation.update({
+                        where: { id: conversation.id },
+                        data: { last_message_at: new Date(), last_outbound_at: new Date() },
+                    });
                     actionLog = { type: action.type, success: true, sentText: text };
                     break;
                 }
@@ -110,8 +114,8 @@ export async function executeAutomationActions(
                 // ── Private reply to a comment (sends DM) ────────────────
                 // When the event is an Instagram comment, use the private-reply
                 // endpoint (recipient.comment_id) which bypasses the 24-hour
-                // messaging window. For non-comment events, fall back to a
-                // regular DM (sendOutbound) which requires the window to be open.
+                // messaging window. Both the direct send AND the queue use this
+                // path so burst comments are rate-limited via enqueueDM.
                 case "SEND_PRIVATE_REPLY": {
                     const cfg = config as unknown as SendMessageConfig;
                     const text = interpolateMessage(cfg.message, {
@@ -119,10 +123,11 @@ export async function executeAutomationActions(
                     });
 
                     if (event.channel === "INSTAGRAM" && event.isComment && event.commentId) {
-                        // Comment-to-DM: use comment_id recipient — no 24h window restriction
+                        // Comment-to-DM via rate-limited queue — prevents burst 403s
                         const account = await getInstagramAccount(event.accountId);
                         if (!account) throw new Error("Instagram account not found or expired");
-                        await sendInstagramPrivateReply(account, event.commentId, text);
+                        const commentId = event.commentId;
+                        enqueueDM(event.accountId, () => sendInstagramPrivateReply(account, commentId, text));
                         await storeOutboundMessage(conversation, text, automation.id);
                         await prisma.conversation.update({
                             where: { id: conversation.id },
@@ -130,7 +135,7 @@ export async function executeAutomationActions(
                         });
                         actionLog = { type: action.type, success: true, sentText: text };
                     } else {
-                        // Non-comment context: regular DM (requires 24h window)
+                        // Non-comment context: regular DM via queue (requires 24h window)
                         const sentText = await sendOutbound(event, conversation, text, automation.id);
                         actionLog = { type: action.type, success: true, sentText };
                     }
@@ -156,8 +161,21 @@ export async function executeAutomationActions(
                 case "AI_REPLY": {
                     const aiText = await getConversationAIReply(event, conversation);
                     if (aiText) {
-                        const sentText = await sendOutbound(event, conversation, aiText, automation.id);
-                        actionLog = { type: action.type, success: true, sentText };
+                        // If this is a comment event, use private reply (bypasses 24h window)
+                        if (event.channel === "INSTAGRAM" && event.isComment && event.commentId) {
+                            const account = await getInstagramAccount(event.accountId);
+                            if (!account) throw new Error("Instagram account not found or expired");
+                            const commentId = event.commentId;
+                            enqueueDM(event.accountId, () => sendInstagramPrivateReply(account, commentId, aiText));
+                            await storeOutboundMessage(conversation, aiText, automation.id);
+                            await prisma.conversation.update({
+                                where: { id: conversation.id },
+                                data: { last_message_at: new Date(), last_outbound_at: new Date() },
+                            });
+                        } else {
+                            await sendOutbound(event, conversation, aiText, automation.id);
+                        }
+                        actionLog = { type: action.type, success: true, sentText: aiText };
                     } else {
                         actionLog = { type: action.type, success: false, error: "AI returned empty response" };
                     }
