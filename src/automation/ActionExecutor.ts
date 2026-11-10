@@ -23,6 +23,7 @@ import {
     sendInstagramPrivateReply,
     interpolateMessage,
 } from "../adapters/instagram-messaging";
+import { enqueueDM } from "../queue/dm.queue";
 import { sendWhatsAppMessage } from "../adapters/whatsapp.adapter";
 import { getConversationAIReply } from "./ConversationAIService";
 import type { NormalizedMessageEvent } from "./events/NormalizedEvent";
@@ -226,24 +227,30 @@ async function sendOutbound(
     if (event.channel === "INSTAGRAM") {
         const account = await getInstagramAccount(event.accountId);
         if (!account) throw new Error("Instagram account not found or expired");
-        await sendInstagramDM(account, event.externalUserId, text);
+
+        // Route through rate-limited queue (max 180 DMs/hour per account)
+        // to avoid Meta flagging burst activity from reel comments
+        enqueueDM(event.accountId, () => sendInstagramDM(account, event.externalUserId, text));
+
+        // Store message and update conversation immediately (don't wait for DM send)
+        await storeOutboundMessage(conversation, text, automationId);
+        await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { last_message_at: new Date(), last_outbound_at: new Date() },
+        });
     } else if (event.channel === "WHATSAPP") {
         const waAccount = await prisma.whatsAppAccount.findUnique({
             where: { id: event.accountId },
         });
         if (!waAccount) throw new Error("WhatsApp account not found");
         await sendWhatsAppMessage(waAccount, event.externalUserId, text);
+
+        await storeOutboundMessage(conversation, text, automationId);
+        await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { last_message_at: new Date(), last_outbound_at: new Date() },
+        });
     }
-
-    await storeOutboundMessage(conversation, text, automationId);
-
-    await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-            last_message_at: new Date(),
-            last_outbound_at: new Date(),
-        },
-    });
 
     return text;
 }
