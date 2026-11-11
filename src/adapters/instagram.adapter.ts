@@ -33,15 +33,15 @@ import type { PlatformPublisher } from "./platform-publisher.interface";
 import type { OAuthStatePayload } from "../types/account.types";
 import type { PublishResult } from "../types/post.types";
 
-const IG_AUTH_URL = "https://api.instagram.com/oauth/authorize";
+const IG_AUTH_URL = "https://www.instagram.com/oauth/authorize";
 const IG_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const IG_GRAPH_API = "https://graph.instagram.com";
 
-// Scopes for Instagram API with Instagram Login.
+// Scopes for Instagram API with Instagram Login (legacy) and Unified Login.
 // instagram_business_basic         — read profile, IG user ID (required base)
-// instagram_business_content_publish — publish media (existing feature)
-// instagram_business_messaging     — send DMs to users who've interacted (required for comment→DM automation)
-// instagram_manage_comments        — read + reply to comments (required for comment trigger + public reply)
+// instagram_business_content_publish — publish media
+// instagram_business_messaging     — send DMs (comment→DM automation)
+// instagram_manage_comments        — read + reply to comments
 const SCOPES = [
     "instagram_business_basic",
     "instagram_business_content_publish",
