@@ -21,7 +21,7 @@ import { env } from "../config/env";
 import { logger } from "../lib/logger";
 import { prisma } from "../config/db";
 import { processEvent } from "../automation/AutomationEngine";
-import { normalizeInstagramPayload } from "../automation/events/normalizeInstagram";
+import { normalizeInstagramEntry, type IGWebhookEntry } from "../automation/events/normalizeInstagram";
 
 const router = Router();
 
@@ -70,7 +70,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
 
     const rawBody = req.body as {
         object?: string;
-        entry?: Array<{ id: string }>;
+        entry?: IGWebhookEntry[];
     };
 
     try {
@@ -105,7 +105,9 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
                 continue;
             }
 
-            const events = normalizeInstagramPayload(rawBody, account.id, account.user_id);
+            // Pass the single matched entry — prevents cross-account event misattribution
+            // when Meta delivers multiple entries in one payload (Bug 1 fix).
+            const events = normalizeInstagramEntry(entry, account.id, account.user_id);
 
             for (const event of events) {
                 // Fire-and-forget — respond 200 first, process asynchronously.

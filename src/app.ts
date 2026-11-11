@@ -31,7 +31,12 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ─── Security headers ────────────────────────────────────────────────────────
-app.use(helmet());
+// Disable COEP — it blocks OAuth redirect flows (Instagram, Google, LinkedIn)
+// which load third-party resources in the same browsing context.
+app.use(helmet({
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+}));
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 const allowedOrigins = env.FRONTEND_URL.split(",").map((u) => u.trim());

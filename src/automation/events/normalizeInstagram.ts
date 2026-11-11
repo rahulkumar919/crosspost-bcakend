@@ -23,6 +23,8 @@ interface IGWebhookEntry {
     changes?: IGChangeEvent[];
 }
 
+export type { IGWebhookEntry };
+
 interface IGMessagingEvent {
     sender: { id: string };
     recipient: { id: string };
@@ -51,92 +53,109 @@ interface IGChangeEvent {
     };
 }
 
-export function normalizeInstagramPayload(
-    rawBody: unknown,
+/**
+ * Normalize a single Instagram webhook entry into NormalizedMessageEvents.
+ *
+ * Accepts ONE entry (not the full payload) so multi-entry deliveries
+ * are attributed to the correct account without cross-contamination.
+ */
+export function normalizeInstagramEntry(
+    entry: IGWebhookEntry,
     accountId: string,
     userId: string
 ): NormalizedMessageEvent[] {
     const events: NormalizedMessageEvent[] = [];
 
     try {
-        const body = rawBody as { object?: string; entry?: IGWebhookEntry[] };
-        if (!body?.entry) return events;
+        const igUserId = entry.id; // This account's IGID
 
-        for (const entry of body.entry) {
-            const igUserId = entry.id; // This account's IGID
+        // ── DM / messaging events ──────────────────────────────────────
+        for (const msg of entry.messaging ?? []) {
+            if (!msg.message) continue; // skip read receipts
 
-            // ── DM / messaging events ──────────────────────────────────────
-            for (const msg of entry.messaging ?? []) {
-                if (!msg.message) continue; // skip read receipts
+            const isEcho = msg.message.is_echo ?? false;
+            const text = msg.message.text ?? "";
+            const mid = msg.message.mid ?? "";
 
-                const isEcho = msg.message.is_echo ?? false;
-                const text = msg.message.text ?? "";
-                const mid = msg.message.mid ?? "";
-
-                let messageType: NormalizedMessageEvent["messageType"] = "text";
-                const attachment = msg.message.attachments?.[0];
-                if (attachment) {
-                    const t = attachment.type as string;
-                    if (t === "image") messageType = "image";
-                    else if (t === "video") messageType = "video";
-                    else if (t === "audio") messageType = "audio";
-                    else messageType = "unsupported";
-                }
-
-                events.push({
-                    channel: "INSTAGRAM",
-                    accountId,
-                    userId,
-                    externalUserId: msg.sender.id,
-                    externalConversationId: msg.sender.id, // IG thread = sender PSID
-                    externalMessageId: mid,
-                    messageText: text,
-                    messageType,
-                    isEcho,
-                    isComment: false,
-                    timestamp: msg.timestamp ?? Date.now(),
-                    raw: msg,
-                });
+            let messageType: NormalizedMessageEvent["messageType"] = "text";
+            const attachment = msg.message.attachments?.[0];
+            if (attachment) {
+                const t = attachment.type as string;
+                if (t === "image") messageType = "image";
+                else if (t === "video") messageType = "video";
+                else if (t === "audio") messageType = "audio";
+                else messageType = "unsupported";
             }
 
-            // ── Comment events ─────────────────────────────────────────────
-            for (const change of entry.changes ?? []) {
-                if (change.field !== "comments") continue;
-                const val = change.value;
-                if (val.verb !== "add") continue; // only new comments
+            events.push({
+                channel: "INSTAGRAM",
+                accountId,
+                userId,
+                externalUserId: msg.sender.id,
+                externalConversationId: msg.sender.id,
+                externalMessageId: mid,
+                messageText: text,
+                messageType,
+                isEcho,
+                isComment: false,
+                timestamp: msg.timestamp ?? Date.now(),
+                raw: msg,
+            });
+        }
 
-                const commentId = val.comment_id ?? val.id ?? "";
-                const fromId = val.from?.id ?? "";
-                const text = val.text ?? "";
-                const mediaId = val.media?.id ?? "";
+        // ── Comment events ─────────────────────────────────────────────
+        for (const change of entry.changes ?? []) {
+            if (change.field !== "comments") continue;
+            const val = change.value;
+            if (val.verb !== "add") continue; // only new comments
 
-                // Skip our own comments (echo prevention)
-                if (fromId === igUserId) continue;
+            const commentId = val.comment_id ?? val.id ?? "";
+            const fromId = val.from?.id ?? "";
+            const text = val.text ?? "";
+            const mediaId = val.media?.id ?? "";
 
-                events.push({
-                    channel: "INSTAGRAM",
-                    accountId,
-                    userId,
-                    externalUserId: fromId,
-                    externalConversationId: fromId,
-                    externalMessageId: commentId,
-                    messageText: text,
-                    messageType: "text",
-                    isEcho: false,
-                    isComment: true,
-                    commentId,
-                    postId: mediaId,
-                    senderName: val.from?.username,
-                    timestamp: (val.timestamp ?? Math.floor(Date.now() / 1000)) * 1000,
-                    raw: val,
-                });
-            }
+            // Skip our own comments (echo prevention)
+            if (fromId === igUserId) continue;
+
+            events.push({
+                channel: "INSTAGRAM",
+                accountId,
+                userId,
+                externalUserId: fromId,
+                externalConversationId: fromId,
+                externalMessageId: commentId,
+                messageText: text,
+                messageType: "text",
+                isEcho: false,
+                isComment: true,
+                commentId,
+                postId: mediaId,
+                senderName: val.from?.username,
+                timestamp: (val.timestamp ?? Math.floor(Date.now() / 1000)) * 1000,
+                raw: val,
+            });
         }
     } catch (err) {
-        logger.error("Failed to normalize Instagram webhook payload", {
+        logger.error("Failed to normalize Instagram webhook entry", {
             error: err instanceof Error ? err.message : String(err),
         });
     }
 
     return events;
+}
+
+/**
+ * @deprecated Use normalizeInstagramEntry per entry instead.
+ * Kept for backwards compatibility — only safe with single-entry payloads.
+ */
+export function normalizeInstagramPayload(
+    rawBody: unknown,
+    accountId: string,
+    userId: string
+): NormalizedMessageEvent[] {
+    const body = rawBody as { entry?: IGWebhookEntry[] };
+    if (!body?.entry?.length) return [];
+    // With a single entry this is safe; multi-entry payloads should use
+    // normalizeInstagramEntry per matched entry (see instagram.webhook.ts).
+    return normalizeInstagramEntry(body.entry[0], accountId, userId);
 }

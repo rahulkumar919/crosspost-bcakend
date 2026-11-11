@@ -60,10 +60,20 @@ export async function processEvent(event: NormalizedMessageEvent): Promise<void>
                 user_id: event.userId,
             },
         });
-    } catch {
-        // Unique constraint violation = duplicate event
-        logger.info("AutomationEngine: duplicate event ignored", logCtx);
-        return;
+    } catch (err: unknown) {
+        // Only treat unique-constraint violation (P2002) as a duplicate.
+        // Any other error (DB outage, connection failure) is re-thrown so the
+        // event is not silently dropped.
+        const prismaCode = (err as { code?: string })?.code;
+        if (prismaCode === "P2002") {
+            logger.info("AutomationEngine: duplicate event ignored", logCtx);
+            return;
+        }
+        logger.error("AutomationEngine: failed to record webhook event", {
+            ...logCtx,
+            error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
     }
 
     // ── 3. Upsert conversation ────────────────────────────────────────────────

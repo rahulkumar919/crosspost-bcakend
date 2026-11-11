@@ -23,6 +23,7 @@ import {
     sendInstagramPrivateReply,
     interpolateMessage,
 } from "../adapters/instagram-messaging";
+import { instagramAdapter } from "../adapters/instagram.adapter";
 import { enqueueDM } from "../queue/dm.queue";
 import { sendWhatsAppMessage } from "../adapters/whatsapp.adapter";
 import { getConversationAIReply } from "./ConversationAIService";
@@ -291,9 +292,20 @@ async function storeOutboundMessage(
 }
 
 async function getInstagramAccount(accountId: string) {
-    return prisma.connectedAccount.findUnique({
+    const account = await prisma.connectedAccount.findUnique({
         where: { id: accountId },
     });
+    if (!account) return null;
+    // Refresh token if within 7 days of expiry — prevents 401s on the send path
+    try {
+        return await instagramAdapter.refreshTokenIfNeeded(account);
+    } catch (err) {
+        logger.warn("ActionExecutor: token refresh failed, proceeding with existing token", {
+            accountId,
+            error: err instanceof Error ? err.message : String(err),
+        });
+        return account;
+    }
 }
 
 async function attachTag(
