@@ -33,7 +33,7 @@ import type { PlatformPublisher } from "./platform-publisher.interface";
 import type { OAuthStatePayload } from "../types/account.types";
 import type { PublishResult } from "../types/post.types";
 
-const IG_AUTH_URL = "https://api.instagram.com/oauth/authorize";
+const IG_AUTH_URL = "https://www.instagram.com/oauth/authorize";
 const IG_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const IG_GRAPH_API = "https://graph.instagram.com";
 

@@ -199,6 +199,12 @@ export const automationService = {
         return prisma.automation.update({
             where: { id: automationId },
             data: { status: "ACTIVE" },
+            include: {
+                triggers: true,
+                conditions: true,
+                actions: { orderBy: { order: "asc" } },
+                _count: { select: { executions: true } },
+            },
         });
     },
 
@@ -208,6 +214,12 @@ export const automationService = {
         return prisma.automation.update({
             where: { id: automationId },
             data: { status: "PAUSED" },
+            include: {
+                triggers: true,
+                conditions: true,
+                actions: { orderBy: { order: "asc" } },
+                _count: { select: { executions: true } },
+            },
         });
     },
 
