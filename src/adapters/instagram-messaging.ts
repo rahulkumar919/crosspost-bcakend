@@ -88,66 +88,86 @@ export async function sendInstagramPrivateReply(
     const accessToken = decrypt(account.access_token);
     const message = text.slice(0, 1000);
 
-    try {
-        await axios.post(
-            `${IG_GRAPH_API}/${API_VERSION}/me/messages`,
-            {
-                recipient: { comment_id: commentId },
-                message: { text: message },
-            },
-            {
-                params: { access_token: accessToken },
-                timeout: 15_000,
+    const target = account.platform_account_id && account.platform_account_id !== "instagram_user"
+        ? account.platform_account_id
+        : "me";
+
+    const endpoints = target !== "me" ? [target, "me"] : ["me"];
+    let lastError: unknown;
+
+    for (const ep of endpoints) {
+        try {
+            await axios.post(
+                `${IG_GRAPH_API}/${API_VERSION}/${ep}/messages`,
+                {
+                    recipient: { comment_id: commentId },
+                    message: { text: message },
+                },
+                {
+                    params: { access_token: accessToken },
+                    timeout: 15_000,
+                }
+            );
+
+            logger.info("Instagram private reply (comment→DM) sent", {
+                accountId: account.id,
+                endpoint: ep,
+                commentIdPrefix: commentId.slice(0, 12) + "…",
+                messageLength: message.length,
+            });
+            return;
+        } catch (err: unknown) {
+            lastError = err;
+            const axErr = err as { response?: { status?: number } };
+            // If the explicit ID gave 400/404, fallback to "me"
+            if (endpoints.length > 1 && (axErr.response?.status === 404 || axErr.response?.status === 400)) {
+                logger.warn(`Private reply failed on endpoint ${ep}, trying next endpoint...`);
+                continue;
             }
-        );
-
-        logger.info("Instagram private reply (comment→DM) sent", {
-            accountId: account.id,
-            commentIdPrefix: commentId.slice(0, 12) + "…",
-            messageLength: message.length,
-        });
-    } catch (err: unknown) {
-        const axErr = err as { response?: { status?: number; data?: unknown }; message?: string };
-        const status = axErr.response?.status;
-        const detail = axErr.response?.data;
-
-        logger.error("Instagram private reply failed", {
-            status,
-            detail: JSON.stringify(detail),
-            accountId: account.id,
-        });
-
-        if (status === 403) {
-            throw new AppError(
-                "Instagram private reply failed (403): your app needs " +
-                "instagram_business_messaging approved in App Review, or the comment " +
-                "is too old (>7 days). Ensure the app is not in Development mode for " +
-                "users outside your test list.",
-                403,
-                "IG_PRIVATE_REPLY_FORBIDDEN"
-            );
+            break;
         }
-        if (status === 401) {
-            throw new AppError(
-                "Instagram token expired. Please reconnect your Instagram account.",
-                401,
-                "IG_TOKEN_EXPIRED"
-            );
-        }
-        if (status === 400) {
-            throw new AppError(
-                "Instagram private reply failed (400): the comment may no longer be " +
-                "eligible (>7 days old, deleted, or from a private account).",
-                400,
-                "IG_PRIVATE_REPLY_INELIGIBLE"
-            );
-        }
+    }
+
+    const axErr = lastError as { response?: { status?: number; data?: unknown }; message?: string };
+    const status = axErr.response?.status;
+    const detail = axErr.response?.data;
+
+    logger.error("Instagram private reply failed", {
+        status,
+        detail: JSON.stringify(detail),
+        accountId: account.id,
+    });
+
+    if (status === 403) {
         throw new AppError(
-            `Instagram private reply failed: ${axErr.message ?? "Unknown error"}`,
-            502,
-            "IG_PRIVATE_REPLY_ERROR"
+            "Instagram private reply failed (403): your app needs " +
+            "instagram_business_manage_messages approved in App Review, or the comment " +
+            "is too old (>7 days). Ensure the app is not in Development mode for " +
+            "users outside your test list.",
+            403,
+            "IG_PRIVATE_REPLY_FORBIDDEN"
         );
     }
+    if (status === 401) {
+        throw new AppError(
+            "Instagram token expired. Please reconnect your Instagram account.",
+            401,
+            "IG_TOKEN_EXPIRED"
+        );
+    }
+    if (status === 400) {
+        throw new AppError(
+            "Instagram private reply failed (400): the comment may no longer be " +
+            "eligible (>7 days old, deleted, or from a private account).",
+            400,
+            "IG_PRIVATE_REPLY_INELIGIBLE"
+        );
+    }
+    throw new AppError(
+        `Instagram private reply failed: ${axErr.message ?? "Unknown error"}`,
+        502,
+        "IG_PRIVATE_REPLY_ERROR"
+    );
 }
 
 // ─── Send Instagram DM (open conversation) ────────────────────────────────────

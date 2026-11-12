@@ -33,7 +33,7 @@ import type { PlatformPublisher } from "./platform-publisher.interface";
 import type { OAuthStatePayload } from "../types/account.types";
 import type { PublishResult } from "../types/post.types";
 
-const IG_AUTH_URL = "https://www.instagram.com/oauth/authorize";
+const IG_AUTH_URL = "https://api.instagram.com/oauth/authorize";
 const IG_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const IG_GRAPH_API = "https://graph.instagram.com";
 
@@ -219,6 +219,29 @@ export const instagramAdapter: PlatformPublisher = {
             });
         }
 
+        // ── Step 4: Subscribe Instagram account to webhooks ───────────────────
+        try {
+            const subTarget = platformAccountId && platformAccountId !== "instagram_user"
+                ? platformAccountId
+                : "me";
+            await axios.post(
+                `${IG_GRAPH_API}/v21.0/${subTarget}/subscribed_apps`,
+                null,
+                {
+                    params: {
+                        subscribed_fields: "comments,messages,live_comments",
+                        access_token: longToken,
+                    },
+                    timeout: 10_000,
+                }
+            );
+            logger.info("Instagram subscribed_apps success on OAuth connect", { subTarget });
+        } catch (subErr: any) {
+            logger.warn("Instagram subscribed_apps call failed on OAuth connect", {
+                error: subErr?.response?.data || subErr.message,
+            });
+        }
+
         return {
             id: "",
             platform: "INSTAGRAM",
@@ -393,4 +416,43 @@ function buildCaption(postTarget: PostTarget): string {
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Subscribes a connected Instagram account to app webhooks.
+ * Must be called so Meta starts delivering messages and comments for this user.
+ */
+export async function subscribeInstagramAccountToWebhooks(account: ConnectedAccount): Promise<boolean> {
+    try {
+        const freshAccount = await instagramAdapter.refreshTokenIfNeeded(account);
+        const accessToken = decrypt(freshAccount.access_token);
+        const target = freshAccount.platform_account_id && freshAccount.platform_account_id !== "instagram_user"
+            ? freshAccount.platform_account_id
+            : "me";
+
+        const res = await axios.post<{ success?: boolean }>(
+            `${IG_GRAPH_API}/v21.0/${target}/subscribed_apps`,
+            null,
+            {
+                params: {
+                    subscribed_fields: "comments,messages,live_comments",
+                    access_token: accessToken,
+                },
+                timeout: 10_000,
+            }
+        );
+
+        logger.info("Instagram account subscribed to webhooks successfully", {
+            accountId: account.id,
+            target,
+            data: res.data,
+        });
+        return true;
+    } catch (err: any) {
+        logger.warn("Failed to subscribe Instagram account to webhooks", {
+            accountId: account.id,
+            error: err?.response?.data || err.message,
+        });
+        return false;
+    }
 }

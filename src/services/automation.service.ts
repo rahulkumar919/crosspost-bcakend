@@ -4,6 +4,7 @@
  * All operations are scoped to the requesting user (multi-tenant security).
  */
 import { prisma } from "../config/db";
+import { subscribeInstagramAccountToWebhooks } from "../adapters/instagram.adapter";
 import type {
     AutomationChannel,
     AutomationTriggerType,
@@ -54,6 +55,15 @@ export interface UpdateAutomationInput {
 
 export const automationService = {
     async list(userId: string) {
+        // Asynchronously ensure any connected Instagram accounts are subscribed to webhooks
+        prisma.connectedAccount.findMany({
+            where: { user_id: userId, platform: "INSTAGRAM", status: "CONNECTED" },
+        }).then((accounts) => {
+            for (const acc of accounts) {
+                subscribeInstagramAccountToWebhooks(acc).catch(() => {});
+            }
+        }).catch(() => {});
+
         return prisma.automation.findMany({
             where: { user_id: userId },
             include: {

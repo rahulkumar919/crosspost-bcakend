@@ -54,6 +54,7 @@ export async function oauthCallback(
     _next: NextFunction
 ): Promise<void> {
     const platform = req.params.platform?.toLowerCase() ?? "unknown";
+    const primaryFrontendUrl = env.FRONTEND_URL.split(",")[0].trim();
 
     try {
         const parsedPlatform = parsePlatform(req.params.platform);
@@ -71,18 +72,18 @@ export async function oauthCallback(
             }
             logger.warn(`OAuth provider returned error for ${platform}`, { oauthError, error_description });
             return res.redirect(
-                `${env.FRONTEND_URL}/accounts?error=${encodeURIComponent(userMessage)}`
+                `${primaryFrontendUrl}/accounts?error=${encodeURIComponent(userMessage)}`
             ) as unknown as void;
         }
 
         if (!code || !state) {
             return res.redirect(
-                `${env.FRONTEND_URL}/accounts?error=${encodeURIComponent("Missing OAuth code or state. Please try connecting again.")}`
+                `${primaryFrontendUrl}/accounts?error=${encodeURIComponent("Missing OAuth code or state. Please try connecting again.")}`
             ) as unknown as void;
         }
 
         await accountsService.handleOAuthCallback(code, state, parsedPlatform);
-        res.redirect(`${env.FRONTEND_URL}/accounts?connected=${platform}`);
+        res.redirect(`${primaryFrontendUrl}/accounts?connected=${platform}`);
     } catch (err: any) {
         // OAuth callbacks are browser redirects — return a redirect, not a JSON 500
         const message: string =
@@ -90,7 +91,7 @@ export async function oauthCallback(
             `Failed to connect ${platform}. Please try again.`;
         logger.error(`OAuth callback failed for ${platform}`, { error: err?.message, stack: err?.stack });
         res.redirect(
-            `${env.FRONTEND_URL}/accounts?error=${encodeURIComponent(message)}`
+            `${primaryFrontendUrl}/accounts?error=${encodeURIComponent(message)}`
         );
     }
 }

@@ -80,6 +80,13 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
+        const entries = rawBody.entry ?? [];
+        logger.info("Instagram webhook: received payload", {
+            object: rawBody.object,
+            entryCount: entries.length,
+            entryIds: entries.map(e => e.id),
+        });
+
         // Load all connected Instagram accounts so we can route each entry
         // to the correct user by matching entry.id (= the account's IGID).
         const igAccounts = await prisma.connectedAccount.findMany({
@@ -88,30 +95,33 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         });
 
         if (igAccounts.length === 0) {
-            logger.debug("Instagram webhook: no connected Instagram accounts — nothing to route");
+            logger.warn("Instagram webhook: no connected Instagram accounts in DB — dropping event");
             return;
         }
 
-        const entries = rawBody.entry ?? [];
-
         for (const entry of entries) {
             const igid = entry.id;
-            const account = igAccounts.find((a) => a.platform_account_id === igid);
+            // Match by platform_account_id, or if only 1 account exists, fallback to it
+            const account = igAccounts.find((a) => a.platform_account_id === igid) ||
+                (igAccounts.length === 1 ? igAccounts[0] : null);
 
             if (!account) {
-                logger.debug("Instagram webhook: no connected account matched IGID", {
+                logger.warn("Instagram webhook: no connected account matched IGID", {
                     igid: igid?.slice(0, 12) + "…",
+                    connectedCount: igAccounts.length,
                 });
                 continue;
             }
 
             // Pass the single matched entry — prevents cross-account event misattribution
-            // when Meta delivers multiple entries in one payload (Bug 1 fix).
             const events = normalizeInstagramEntry(entry, account.id, account.user_id);
+            logger.info("Instagram webhook: normalized events count", {
+                count: events.length,
+                events: events.map(e => ({ isComment: e.isComment, text: e.messageText, commentId: e.commentId })),
+            });
 
             for (const event of events) {
                 // Fire-and-forget — respond 200 first, process asynchronously.
-                // setImmediate ensures the response has been flushed before we do DB work.
                 setImmediate(() => {
                     processEvent(event).catch((err: Error) => {
                         logger.error("Instagram webhook: AutomationEngine error", {
@@ -134,17 +144,12 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
 /**
  * Verifies X-Hub-Signature-256 from Meta using the raw request body buffer.
  *
- * Meta computes:  sha256=HMAC_SHA256(APP_SECRET, rawBody)
- *
- * Rules:
- *  - Must use the raw bytes, NOT JSON.stringify(parsedBody) — those differ.
- *  - Length check before timingSafeEqual to avoid Buffer size mismatch crash.
- *  - In development with no secret configured, allow through with a warning.
+ * Checks both INSTAGRAM_APP_SECRET and INSTAGRAM_CLIENT_SECRET.
  */
 function verifySignature(rawBody: Buffer | undefined, signature: string | undefined): boolean {
-    const secret = env.INSTAGRAM_APP_SECRET || env.INSTAGRAM_CLIENT_SECRET;
+    const secrets = [env.INSTAGRAM_APP_SECRET, env.INSTAGRAM_CLIENT_SECRET].filter(Boolean);
 
-    if (!secret) {
+    if (secrets.length === 0) {
         // No secret set — skip in dev, reject in prod
         if (env.NODE_ENV === "production") {
             logger.error("Instagram webhook: INSTAGRAM_APP_SECRET not set — rejecting all POST events in production");
@@ -164,21 +169,23 @@ function verifySignature(rawBody: Buffer | undefined, signature: string | undefi
         return false;
     }
 
-    const expected = "sha256=" + crypto
-        .createHmac("sha256", secret)
-        .update(rawBody)          // ← raw bytes, not JSON.stringify
-        .digest("hex");
-
     const sigBuf = Buffer.from(signature);
-    const expBuf = Buffer.from(expected);
 
-    // Length check prevents crash from timingSafeEqual on mismatched sizes
-    if (sigBuf.length !== expBuf.length) {
-        logger.warn("Instagram webhook: signature length mismatch");
-        return false;
+    for (const secret of secrets) {
+        const expected = "sha256=" + crypto
+            .createHmac("sha256", secret)
+            .update(rawBody)
+            .digest("hex");
+
+        const expBuf = Buffer.from(expected);
+
+        if (sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf)) {
+            return true;
+        }
     }
 
-    return crypto.timingSafeEqual(sigBuf, expBuf);
+    logger.warn("Instagram webhook: HMAC signature mismatch with all configured secrets");
+    return false;
 }
 
 export default router;

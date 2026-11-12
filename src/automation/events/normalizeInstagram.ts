@@ -105,9 +105,12 @@ export function normalizeInstagramEntry(
 
         // ── Comment events ─────────────────────────────────────────────
         for (const change of entry.changes ?? []) {
-            if (change.field !== "comments") continue;
+            // Accept both "comments" and "live_comments" webhook fields
+            if (change.field !== "comments" && change.field !== "live_comments") continue;
             const val = change.value;
-            if (val.verb !== "add") continue; // only new comments
+            // Meta does NOT send a 'verb' in Instagram comments payloads.
+            // Only skip if verb is explicitly provided and not "add" (e.g. edit/delete).
+            if (val.verb && val.verb !== "add") continue;
 
             const commentId = val.comment_id ?? val.id ?? "";
             const fromId = val.from?.id ?? "";
