@@ -24,7 +24,7 @@ import {
     interpolateMessage,
 } from "../adapters/instagram-messaging";
 import { instagramAdapter } from "../adapters/instagram.adapter";
-import { enqueueDM } from "../queue/dm.queue";
+import { AppError } from "../middleware/error-handler.middleware";
 import { sendWhatsAppMessage } from "../adapters/whatsapp.adapter";
 import { getConversationAIReply } from "./ConversationAIService";
 import type { NormalizedMessageEvent } from "./events/NormalizedEvent";
@@ -53,6 +53,8 @@ interface ActionLog {
     success: boolean;
     error?: string;
     sentText?: string;
+    errorCode?: number;
+    errorSubcode?: number;
 }
 
 // Action config shapes
@@ -115,8 +117,7 @@ export async function executeAutomationActions(
                 // ── Private reply to a comment (sends DM) ────────────────
                 // When the event is an Instagram comment, use the private-reply
                 // endpoint (recipient.comment_id) which bypasses the 24-hour
-                // messaging window. Both the direct send AND the queue use this
-                // path so burst comments are rate-limited via enqueueDM.
+                // messaging window. Processed inline without delayed queues.
                 case "SEND_PRIVATE_REPLY": {
                     const cfg = config as unknown as SendMessageConfig;
                     const text = interpolateMessage(cfg.message, {
@@ -124,11 +125,10 @@ export async function executeAutomationActions(
                     });
 
                     if (event.channel === "INSTAGRAM" && event.isComment && event.commentId) {
-                        // Comment-to-DM via rate-limited queue — prevents burst 403s
                         const account = await getInstagramAccount(event.accountId);
                         if (!account) throw new Error("Instagram account not found or expired");
                         const commentId = event.commentId;
-                        enqueueDM(event.accountId, () => sendInstagramPrivateReply(account, commentId, text));
+                        await sendInstagramPrivateReply(account, commentId, text);
                         await storeOutboundMessage(conversation, text, automation.id);
                         await prisma.conversation.update({
                             where: { id: conversation.id },
@@ -136,7 +136,7 @@ export async function executeAutomationActions(
                         });
                         actionLog = { type: action.type, success: true, sentText: text };
                     } else {
-                        // Non-comment context: regular DM via queue (requires 24h window)
+                        // Non-comment context: regular DM (requires 24h window)
                         const sentText = await sendOutbound(event, conversation, text, automation.id);
                         actionLog = { type: action.type, success: true, sentText };
                     }
@@ -167,7 +167,7 @@ export async function executeAutomationActions(
                             const account = await getInstagramAccount(event.accountId);
                             if (!account) throw new Error("Instagram account not found or expired");
                             const commentId = event.commentId;
-                            enqueueDM(event.accountId, () => sendInstagramPrivateReply(account, commentId, aiText));
+                            await sendInstagramPrivateReply(account, commentId, aiText);
                             await storeOutboundMessage(conversation, aiText, automation.id);
                             await prisma.conversation.update({
                                 where: { id: conversation.id },
@@ -216,13 +216,23 @@ export async function executeAutomationActions(
             }
         } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
-            actionLog = { type: action.type, success: false, error: errMsg };
+            const metaCode = err instanceof AppError ? err.metaCode : undefined;
+            const metaSubcode = err instanceof AppError ? err.metaSubcode : undefined;
+            actionLog = {
+                type: action.type,
+                success: false,
+                error: errMsg,
+                errorCode: metaCode,
+                errorSubcode: metaSubcode,
+            };
             overallSuccess = false;
             overallError = errMsg;
             logger.error("ActionExecutor: action failed", {
                 actionType: action.type,
                 automationId: automation.id,
                 error: errMsg,
+                metaCode,
+                metaSubcode,
             });
         }
 
@@ -247,11 +257,10 @@ async function sendOutbound(
         const account = await getInstagramAccount(event.accountId);
         if (!account) throw new Error("Instagram account not found or expired");
 
-        // Route through rate-limited queue (max 180 DMs/hour per account)
-        // to avoid Meta flagging burst activity from reel comments
-        enqueueDM(event.accountId, () => sendInstagramDM(account, event.externalUserId, text));
+        // Send DM directly inline (no delayed queues)
+        await sendInstagramDM(account, event.externalUserId, text);
 
-        // Store message and update conversation immediately (don't wait for DM send)
+        // Store message and update conversation immediately
         await storeOutboundMessage(conversation, text, automationId);
         await prisma.conversation.update({
             where: { id: conversation.id },

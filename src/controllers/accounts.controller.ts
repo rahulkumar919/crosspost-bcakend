@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as accountsService from "../services/accounts.service";
+import { subscribeInstagramAccountToWebhooks } from "../adapters/instagram.adapter";
+import { prisma } from "../config/db";
 import { Platform } from "@prisma/client";
 import { AppError } from "../middleware/error-handler.middleware";
 import { env } from "../config/env";
@@ -135,6 +137,38 @@ export async function getInstagramMediaById(
         if (!mediaId) { res.status(400).json({ error: "mediaId is required" }); return; }
         const item = await accountsService.getInstagramMediaById(req.user!.id, mediaId);
         res.json(item);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function resubscribeInstagram(
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> {
+    try {
+        const account = await prisma.connectedAccount.findFirst({
+            where: { user_id: req.user!.id, platform: "INSTAGRAM", status: "CONNECTED" },
+        });
+
+        if (!account) {
+            res.status(404).json({ error: "No connected Instagram account found." });
+            return;
+        }
+
+        const success = await subscribeInstagramAccountToWebhooks(account);
+        if (!success) {
+            res.status(502).json({ error: "Failed to subscribe Instagram account to Meta webhooks. Check Meta app settings." });
+            return;
+        }
+
+        res.json({
+            success: true,
+            message: "Instagram account successfully subscribed to Meta webhooks.",
+            subscribedFields: ["comments", "messages", "live_comments"],
+            platformAccountId: account.platform_account_id,
+        });
     } catch (err) {
         next(err);
     }

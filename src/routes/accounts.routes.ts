@@ -13,6 +13,9 @@ router.get("/instagram/media", requireAuth, accountsController.getInstagramMedia
 // GET  /accounts/instagram/media/:mediaId  — single post/reel detail (for card thumbnails)
 router.get("/instagram/media/:mediaId", requireAuth, accountsController.getInstagramMediaById);
 
+// POST /accounts/instagram/resubscribe — re-subscribe connected Instagram account to Meta webhooks
+router.post("/instagram/resubscribe", requireAuth, accountsController.resubscribeInstagram);
+
 // GET  /accounts/connect/:platform  — redirects user to platform OAuth screen
 // Note: requireAuth reads from the Authorization header — the redirect must
 // include the JWT (the frontend appends it as ?token= or the user is already

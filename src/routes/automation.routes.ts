@@ -32,6 +32,18 @@ router.get("/stats", async (req: Request, res: Response) => {
     }
 });
 
+// GET /automations/recent-activity — user-wide recent execution activity
+router.get("/recent-activity", async (req: Request, res: Response) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+        const activity = await automationService.getRecentActivity(req.user!.id, limit);
+        res.json({ activity });
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to get recent activity";
+        res.status(500).json({ error: msg });
+    }
+});
+
 // GET /automations/:id — get single automation
 router.get("/:id", async (req: Request, res: Response) => {
     try {

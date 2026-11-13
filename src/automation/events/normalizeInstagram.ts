@@ -71,11 +71,17 @@ export function normalizeInstagramEntry(
 
         // ── DM / messaging events ──────────────────────────────────────
         for (const msg of entry.messaging ?? []) {
-            if (!msg.message) continue; // skip read receipts
+            if (!msg.message) continue; // skip read receipts, deliveries, reactions, postbacks
 
             const isEcho = msg.message.is_echo ?? false;
+            if (isEcho) continue; // skip echoes
+
+            const senderId = msg.sender?.id ?? "";
+            if (!senderId || senderId === igUserId) continue; // skip empty or messages sent by the account itself
+
             const text = msg.message.text ?? "";
             const mid = msg.message.mid ?? "";
+            if (!mid) continue; // must have a message ID
 
             let messageType: NormalizedMessageEvent["messageType"] = "text";
             const attachment = msg.message.attachments?.[0];

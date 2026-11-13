@@ -94,6 +94,25 @@ export const automationService = {
     },
 
     async create(userId: string, input: CreateAutomationInput) {
+        // Double-click guard: check if identical automation was created in the last 5 seconds
+        const fiveSecondsAgo = new Date(Date.now() - 5000);
+        const existingRecent = await prisma.automation.findFirst({
+            where: {
+                user_id: userId,
+                name: input.name,
+                channel: input.channel,
+                created_at: { gte: fiveSecondsAgo },
+            },
+            include: {
+                triggers: true,
+                conditions: true,
+                actions: { orderBy: { order: "asc" } },
+            },
+        });
+        if (existingRecent) {
+            return existingRecent;
+        }
+
         return prisma.automation.create({
             data: {
                 user_id: userId,
@@ -243,6 +262,21 @@ export const automationService = {
         });
     },
 
+    async getRecentActivity(userId: string, limit = 10) {
+        return prisma.automationExecution.findMany({
+            where: {
+                automation: { user_id: userId },
+            },
+            include: {
+                automation: {
+                    select: { id: true, name: true, channel: true },
+                },
+            },
+            orderBy: { executed_at: "desc" },
+            take: limit,
+        });
+    },
+
     async getStats(userId: string) {
         const [total, active, paused] = await Promise.all([
             prisma.automation.count({ where: { user_id: userId } }),
@@ -250,23 +284,28 @@ export const automationService = {
             prisma.automation.count({ where: { user_id: userId, status: "PAUSED" } }),
         ]);
 
-        const [totalExecs, successExecs, aiReplies] = await Promise.all([
+        const [totalExecs, successExecs] = await Promise.all([
             prisma.automationExecution.count({
                 where: { automation: { user_id: userId } },
             }),
             prisma.automationExecution.count({
                 where: { automation: { user_id: userId }, success: true },
             }),
-            // Count executions that have AI_REPLY actions — uses JSON array filtering
-            prisma.automationExecution.count({
+        ]);
+
+        let aiReplies = 0;
+        try {
+            aiReplies = await prisma.automationExecution.count({
                 where: {
                     automation: { user_id: userId },
                     actions_executed: {
                         array_contains: [{ type: "AI_REPLY" }],
                     },
                 },
-            }),
-        ]);
+            });
+        } catch {
+            aiReplies = 0;
+        }
 
         const [igConversations, waConversations] = await Promise.all([
             prisma.conversation.count({ where: { user_id: userId, channel: "INSTAGRAM" } }),
@@ -279,7 +318,7 @@ export const automationService = {
             paused,
             totalExecs,
             successExecs,
-            failedExecs: totalExecs - successExecs,
+            failedExecs: Math.max(0, totalExecs - successExecs),
             aiReplies,
             igConversations,
             waConversations,

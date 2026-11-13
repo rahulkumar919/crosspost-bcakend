@@ -151,7 +151,12 @@ export async function processEvent(event: NormalizedMessageEvent): Promise<void>
     }) as FullAutomation[];
 
     if (automations.length === 0) {
-        logger.debug("AutomationEngine: no active automations found", logCtx);
+        logger.info("no_match", {
+            stage: "no_match",
+            reason: "no_active_automations",
+            channel: event.channel,
+            userId: event.userId,
+        });
         return;
     }
 
@@ -159,11 +164,18 @@ export async function processEvent(event: NormalizedMessageEvent): Promise<void>
     const matched = findBestMatch(automations, event);
 
     if (!matched) {
-        logger.debug("AutomationEngine: no automation matched conditions", logCtx);
+        logger.info("no_match", {
+            stage: "no_match",
+            reason: "no_condition_matched",
+            channel: event.channel,
+            userId: event.userId,
+            text: event.messageText,
+        });
         return;
     }
 
-    logger.info("AutomationEngine: matched automation", {
+    logger.info("automation_matched", {
+        stage: "automation_matched",
         automationId: matched.id,
         automationName: matched.name,
         conversationId: conversation.id,
@@ -181,9 +193,11 @@ export async function processEvent(event: NormalizedMessageEvent): Promise<void>
             },
         });
         if (recentExecution) {
-            logger.info("AutomationEngine: cooldown active — skipping", {
+            logger.info("cooldown_blocked", {
+                stage: "cooldown_blocked",
                 automationId: matched.id,
                 conversationId: conversation.id,
+                senderId: event.externalUserId,
                 cooldownSeconds: matched.cooldown_seconds,
             });
             return;
@@ -194,7 +208,7 @@ export async function processEvent(event: NormalizedMessageEvent): Promise<void>
     const startMs = Date.now();
     let success = false;
     let errorMessage: string | undefined;
-    const actionsExecuted: Array<{ type: string; success: boolean; error?: string; sentText?: string }> = [];
+    const actionsExecuted: Array<{ type: string; success: boolean; error?: string; sentText?: string; errorCode?: number; errorSubcode?: number }> = [];
 
     try {
         const result = await executeAutomationActions(
@@ -215,6 +229,22 @@ export async function processEvent(event: NormalizedMessageEvent): Promise<void>
     }
 
     // ── 11. Log execution ─────────────────────────────────────────────────────
+    const executionMeta = {
+        automationId: matched.id,
+        userId: event.userId,
+        instagramAccountId: event.accountId,
+        eventId: event.externalMessageId,
+        senderId: event.externalUserId,
+        eventType: event.isComment ? "COMMENT" : "DM",
+        status: success ? "success" : "failed",
+        receivedAt: new Date(event.timestamp).toISOString(),
+        processingAt: new Date(startMs).toISOString(),
+        completedAt: new Date().toISOString(),
+        errorCode: actionsExecuted.find(a => !a.success && a.error)?.errorCode ?? null,
+        errorMessage: errorMessage ?? null,
+        actions: actionsExecuted,
+    };
+
     try {
         await prisma.automationExecution.create({
             data: {
@@ -224,8 +254,7 @@ export async function processEvent(event: NormalizedMessageEvent): Promise<void>
                 channel: event.channel,
                 success,
                 error_message: errorMessage ?? null,
-                // Serialize to plain JSON to satisfy Prisma's InputJsonValue constraint
-                actions_executed: JSON.parse(JSON.stringify(actionsExecuted)),
+                actions_executed: JSON.parse(JSON.stringify(executionMeta)),
             },
         });
     } catch (err) {

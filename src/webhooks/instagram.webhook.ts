@@ -54,19 +54,31 @@ router.get("/", (req: Request, res: Response): void => {
 // ─── POST — Event Receiver ────────────────────────────────────────────────────
 
 router.post("/", async (req: Request, res: Response): Promise<void> => {
-    // Always respond 200 immediately — Meta retries if we return non-2xx or time out.
-    res.status(200).json({ received: true });
+    logger.info("webhook_received", {
+        stage: "webhook_received",
+        headers: {
+            signature: req.headers["x-hub-signature-256"] ? "present" : "missing",
+            contentType: req.headers["content-type"],
+        },
+    });
 
     // ── Signature verification ────────────────────────────────────────────────
     const signature = req.headers["x-hub-signature-256"] as string | undefined;
 
     if (!verifySignature(req.rawBody, signature)) {
-        logger.warn("Instagram webhook: invalid or missing HMAC signature — dropping event", {
+        logger.warn("signature_failed", {
+            stage: "signature_failed",
             hasRawBody: !!req.rawBody,
             hasSignature: !!signature,
         });
+        res.status(401).json({ error: "Invalid signature" });
         return;
     }
+
+    logger.info("signature_ok", { stage: "signature_ok" });
+
+    // Respond 200 quickly once verified
+    res.status(200).json({ received: true });
 
     const rawBody = req.body as {
         object?: string;
@@ -81,11 +93,6 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         }
 
         const entries = rawBody.entry ?? [];
-        logger.info("Instagram webhook: received payload", {
-            object: rawBody.object,
-            entryCount: entries.length,
-            entryIds: entries.map(e => e.id),
-        });
 
         // Load all connected Instagram accounts so we can route each entry
         // to the correct user by matching entry.id (= the account's IGID).
@@ -95,33 +102,53 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         });
 
         if (igAccounts.length === 0) {
-            logger.warn("Instagram webhook: no connected Instagram accounts in DB — dropping event");
+            logger.warn("account_not_found", {
+                stage: "account_not_found",
+                reason: "no connected Instagram accounts in DB",
+            });
             return;
         }
 
         for (const entry of entries) {
             const igid = entry.id;
-            // Match by platform_account_id, or if only 1 account exists, fallback to it
+
+            // Match by platform_account_id, or fallback if only 1 account exists
             const account = igAccounts.find((a) => a.platform_account_id === igid) ||
                 (igAccounts.length === 1 ? igAccounts[0] : null);
 
+            logger.info("account_match_check", {
+                stage: account ? "account_matched" : "account_not_found",
+                entryId: igid,
+                matchedAccountId: account?.id,
+                matchedPlatformAccountId: account?.platform_account_id,
+                storedAccountIds: igAccounts.map(a => a.platform_account_id),
+            });
+
             if (!account) {
-                logger.warn("Instagram webhook: no connected account matched IGID", {
-                    igid: igid?.slice(0, 12) + "…",
-                    connectedCount: igAccounts.length,
+                logger.warn("account_not_found", {
+                    stage: "account_not_found",
+                    igid,
+                    availableAccounts: igAccounts.map(a => ({ id: a.id, platform_account_id: a.platform_account_id })),
                 });
                 continue;
             }
 
             // Pass the single matched entry — prevents cross-account event misattribution
             const events = normalizeInstagramEntry(entry, account.id, account.user_id);
-            logger.info("Instagram webhook: normalized events count", {
+            logger.info("event_parsed", {
+                stage: "event_parsed",
                 count: events.length,
-                events: events.map(e => ({ isComment: e.isComment, text: e.messageText, commentId: e.commentId })),
+                events: events.map(e => ({
+                    isComment: e.isComment,
+                    messageType: e.messageType,
+                    externalMessageId: e.externalMessageId,
+                    commentId: e.commentId,
+                    senderId: e.externalUserId,
+                })),
             });
 
             for (const event of events) {
-                // Fire-and-forget — respond 200 first, process asynchronously.
+                // Execute inline / next-tick without delay
                 setImmediate(() => {
                     processEvent(event).catch((err: Error) => {
                         logger.error("Instagram webhook: AutomationEngine error", {

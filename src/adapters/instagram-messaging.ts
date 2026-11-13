@@ -95,6 +95,14 @@ export async function sendInstagramPrivateReply(
     const endpoints = target !== "me" ? [target, "me"] : ["me"];
     let lastError: unknown;
 
+    logger.info("send_attempt", {
+        stage: "send_attempt",
+        type: "PRIVATE_REPLY",
+        accountId: account.id,
+        target,
+        commentId,
+    });
+
     for (const ep of endpoints) {
         try {
             await axios.post(
@@ -109,7 +117,9 @@ export async function sendInstagramPrivateReply(
                 }
             );
 
-            logger.info("Instagram private reply (comment→DM) sent", {
+            logger.info("send_ok", {
+                stage: "send_ok",
+                type: "PRIVATE_REPLY",
                 accountId: account.id,
                 endpoint: ep,
                 commentIdPrefix: commentId.slice(0, 12) + "…",
@@ -130,43 +140,54 @@ export async function sendInstagramPrivateReply(
 
     const axErr = lastError as { response?: { status?: number; data?: unknown }; message?: string };
     const status = axErr.response?.status;
-    const detail = axErr.response?.data;
+    const detail = axErr.response?.data as { error?: { message?: string; code?: number; error_subcode?: number } } | undefined;
+    const metaCode = detail?.error?.code;
+    const metaSubcode = detail?.error?.error_subcode;
+    const metaMessage = detail?.error?.message ?? axErr.message ?? "Unknown Meta API error";
 
-    logger.error("Instagram private reply failed", {
+    logger.error("send_failed", {
+        stage: "send_failed",
+        type: "PRIVATE_REPLY",
         status,
-        detail: JSON.stringify(detail),
+        metaCode,
+        metaSubcode,
+        metaMessage,
         accountId: account.id,
     });
 
     if (status === 403) {
         throw new AppError(
-            "Instagram private reply failed (403): your app needs " +
-            "instagram_business_manage_messages approved in App Review, or the comment " +
-            "is too old (>7 days). Ensure the app is not in Development mode for " +
-            "users outside your test list.",
+            `Instagram private reply failed (403): ${metaMessage}. Ensure app has instagram_business_manage_messages and is Live or tester account.`,
             403,
-            "IG_PRIVATE_REPLY_FORBIDDEN"
+            "IG_PRIVATE_REPLY_FORBIDDEN",
+            metaCode,
+            metaSubcode
         );
     }
     if (status === 401) {
         throw new AppError(
             "Instagram token expired. Please reconnect your Instagram account.",
             401,
-            "IG_TOKEN_EXPIRED"
+            "IG_TOKEN_EXPIRED",
+            metaCode,
+            metaSubcode
         );
     }
     if (status === 400) {
         throw new AppError(
-            "Instagram private reply failed (400): the comment may no longer be " +
-            "eligible (>7 days old, deleted, or from a private account).",
+            `Instagram private reply failed (400): ${metaMessage}. Comment may be older than 7 days or deleted.`,
             400,
-            "IG_PRIVATE_REPLY_INELIGIBLE"
+            "IG_PRIVATE_REPLY_INELIGIBLE",
+            metaCode,
+            metaSubcode
         );
     }
     throw new AppError(
-        `Instagram private reply failed: ${axErr.message ?? "Unknown error"}`,
+        `Instagram private reply failed: ${metaMessage}`,
         502,
-        "IG_PRIVATE_REPLY_ERROR"
+        "IG_PRIVATE_REPLY_ERROR",
+        metaCode,
+        metaSubcode
     );
 }
 
@@ -191,58 +212,97 @@ export async function sendInstagramDM(
     const accessToken = decrypt(account.access_token);
     const message = text.slice(0, 1000);
 
-    try {
-        await axios.post(
-            `${IG_GRAPH_API}/${API_VERSION}/me/messages`,
-            {
-                recipient: { id: recipientIgId },
-                message: { text: message },
-            },
-            {
-                params: { access_token: accessToken },
-                timeout: 15_000,
+    const target = account.platform_account_id && account.platform_account_id !== "instagram_user"
+        ? account.platform_account_id
+        : "me";
+
+    const endpoints = target !== "me" ? [target, "me"] : ["me"];
+    let lastError: unknown;
+
+    logger.info("send_attempt", {
+        stage: "send_attempt",
+        type: "DM",
+        accountId: account.id,
+        target,
+        recipientIgId,
+    });
+
+    for (const ep of endpoints) {
+        try {
+            await axios.post(
+                `${IG_GRAPH_API}/${API_VERSION}/${ep}/messages`,
+                {
+                    recipient: { id: recipientIgId },
+                    message: { text: message },
+                },
+                {
+                    params: { access_token: accessToken },
+                    timeout: 15_000,
+                }
+            );
+
+            logger.info("send_ok", {
+                stage: "send_ok",
+                type: "DM",
+                accountId: account.id,
+                endpoint: ep,
+                recipientPrefix: recipientIgId.slice(0, 8) + "…",
+                messageLength: message.length,
+            });
+            return;
+        } catch (err: unknown) {
+            lastError = err;
+            const axErr = err as { response?: { status?: number } };
+            if (endpoints.length > 1 && (axErr.response?.status === 404 || axErr.response?.status === 400)) {
+                logger.warn(`DM failed on endpoint ${ep}, trying next endpoint...`);
+                continue;
             }
-        );
-
-        logger.info("Instagram DM sent", {
-            accountId: account.id,
-            recipientPrefix: recipientIgId.slice(0, 8) + "…",
-            messageLength: message.length,
-        });
-    } catch (err: unknown) {
-        const axErr = err as { response?: { status?: number; data?: unknown }; message?: string };
-        const status = axErr.response?.status;
-        const detail = axErr.response?.data;
-
-        logger.error("Instagram DM send failed", {
-            status,
-            detail: JSON.stringify(detail),
-            accountId: account.id,
-        });
-
-        if (status === 403) {
-            throw new AppError(
-                "Instagram DM failed: your app may not have " +
-                "instagram_business_messaging permission, or the user is " +
-                "outside the 24-hour messaging window. For comment-triggered " +
-                "replies use sendInstagramPrivateReply() instead.",
-                403,
-                "IG_DM_FORBIDDEN"
-            );
+            break;
         }
-        if (status === 401) {
-            throw new AppError(
-                "Instagram token expired. Please reconnect your Instagram account.",
-                401,
-                "IG_TOKEN_EXPIRED"
-            );
-        }
+    }
+
+    const axErr = lastError as { response?: { status?: number; data?: unknown }; message?: string };
+    const status = axErr.response?.status;
+    const detail = axErr.response?.data as { error?: { message?: string; code?: number; error_subcode?: number } } | undefined;
+    const metaCode = detail?.error?.code;
+    const metaSubcode = detail?.error?.error_subcode;
+    const metaMessage = detail?.error?.message ?? axErr.message ?? "Unknown Meta API error";
+
+    logger.error("send_failed", {
+        stage: "send_failed",
+        type: "DM",
+        status,
+        metaCode,
+        metaSubcode,
+        metaMessage,
+        accountId: account.id,
+    });
+
+    if (status === 403) {
         throw new AppError(
-            `Instagram DM failed: ${axErr.message ?? "Unknown error"}`,
-            502,
-            "IG_DM_FAILED"
+            `Instagram DM failed (403): ${metaMessage}. User may be outside 24-hour messaging window, or app needs instagram_business_manage_messages.`,
+            403,
+            "IG_DM_FORBIDDEN",
+            metaCode,
+            metaSubcode
         );
     }
+    if (status === 401) {
+        throw new AppError(
+            "Instagram token expired. Please reconnect your Instagram account.",
+            401,
+            "IG_TOKEN_EXPIRED",
+            metaCode,
+            metaSubcode
+        );
+    }
+    throw new AppError(
+        `Instagram DM failed: ${metaMessage}`,
+        502,
+        "IG_DM_FAILED",
+        metaCode,
+        metaSubcode
+    );
 }
 
 // ─── Send Instagram Public Comment Reply ──────────────────────────────────────
