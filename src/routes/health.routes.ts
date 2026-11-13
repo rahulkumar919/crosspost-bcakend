@@ -31,7 +31,7 @@ router.get("/", async (_req: Request, res: Response) => {
     ]);
 
     const status = {
-        db:         db.status         === "fulfilled" ? db.value         : false,
+        db: db.status === "fulfilled" ? db.value : false,
         cloudinary: cloudinary.status === "fulfilled" ? cloudinary.value : false,
         // Dynamic key = active provider name (e.g. "mistral": true)
         [provider.name]: ai.status === "fulfilled" ? ai.value : false,
@@ -40,11 +40,64 @@ router.get("/", async (_req: Request, res: Response) => {
     const allHealthy = Object.values(status).every(Boolean);
 
     res.status(allHealthy ? 200 : 207).json({
-        status:    allHealthy ? "ok" : "degraded",
-        provider:  provider.name,
-        services:  status,
+        status: allHealthy ? "ok" : "degraded",
+        provider: provider.name,
+        services: status,
         timestamp: new Date().toISOString(),
     });
+});
+
+/**
+ * GET /health/webhook-debug — shows connected Instagram accounts + their stored IGIDs.
+ * Use this to verify that the IGID in the webhook entry.id matches what's stored.
+ * Remove or protect this endpoint before going public.
+ */
+router.get("/webhook-debug", async (_req: Request, res: Response) => {
+    try {
+        const accounts = await prisma.connectedAccount.findMany({
+            where: { platform: "INSTAGRAM" },
+            select: {
+                id: true,
+                platform_account_id: true,
+                platform_account_name: true,
+                status: true,
+                token_expires_at: true,
+                updated_at: true,
+            },
+        });
+        const recentEvents = await prisma.webhookEvent.findMany({
+            where: { channel: "INSTAGRAM" },
+            orderBy: { id: "desc" },
+            take: 10,
+        });
+        const recentExecutions = await prisma.automationExecution.findMany({
+            where: { channel: "INSTAGRAM" },
+            orderBy: { executed_at: "desc" },
+            take: 5,
+            select: {
+                id: true,
+                automation_id: true,
+                success: true,
+                error_message: true,
+                executed_at: true,
+                actions_executed: true,
+            },
+        });
+        res.json({
+            instagram_accounts: accounts,
+            recent_webhook_events: recentEvents,
+            recent_executions: recentExecutions,
+            env_check: {
+                has_app_id: !!process.env.INSTAGRAM_APP_ID,
+                app_id_value: process.env.INSTAGRAM_APP_ID,
+                has_app_secret: !!process.env.INSTAGRAM_APP_SECRET,
+                has_webhook_secret: !!process.env.INSTAGRAM_WEBHOOK_SECRET,
+                node_env: process.env.NODE_ENV,
+            },
+        });
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
 });
 
 export default router;

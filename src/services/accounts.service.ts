@@ -12,7 +12,7 @@ import type { OAuthStatePayload } from "../types/account.types";
 
 const ADAPTERS: Record<Platform, PlatformPublisher> = {
     YOUTUBE: youtubeAdapter,
-    INSTAGRAM: instagramAdapter,    
+    INSTAGRAM: instagramAdapter,
     LINKEDIN: linkedinAdapter,
 };
 
@@ -131,6 +131,49 @@ export async function handleOAuthCallback(
             created_at: true,
         },
     });
+
+    // ── Subscribe Instagram account to webhooks ───────────────────────────────
+    // After connecting an Instagram account, subscribe it to receive DM and
+    // comment webhook events. Without this Meta does NOT deliver webhooks for
+    // that account even if the app-level webhook is configured.
+    if (platform === "INSTAGRAM") {
+        try {
+            const { default: axios } = await import("axios");
+            const { decrypt } = await import("../lib/encryption");
+            const { logger } = await import("../lib/logger");
+
+            const accessToken = decrypt(result.accessToken);
+            const igUserId = result.platformAccountId;
+
+            // Subscribe this account to messages + comments webhooks
+            const subRes = await axios.post(
+                `https://graph.instagram.com/v21.0/${igUserId}/subscribed_apps`,
+                null,
+                {
+                    params: {
+                        subscribed_fields: "messages,comments,live_comments",
+                        access_token: accessToken,
+                    },
+                    timeout: 10_000,
+                }
+            );
+
+            logger.info("Instagram webhook subscription created", {
+                igUserId,
+                response: subRes.data,
+            });
+        } catch (subErr: unknown) {
+            // Non-fatal — log and continue. The account is still connected.
+            // User can reconnect to retry the subscription.
+            const axErr = subErr as { response?: { data?: unknown }; message?: string };
+            const { logger } = await import("../lib/logger");
+            logger.warn("Instagram webhook subscription failed — automation webhooks may not arrive", {
+                platformAccountId: result.platformAccountId,
+                error: axErr.message,
+                detail: axErr.response?.data,
+            });
+        }
+    }
 
     return account;
 }
