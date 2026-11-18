@@ -255,4 +255,85 @@ router.get("/automation-debug", async (_req: Request, res: Response) => {
     }
 });
 
+/**
+ * POST /health/test-automation — simulate a DM or comment webhook event
+ * to test the automation pipeline end-to-end without needing real Instagram activity.
+ */
+router.post("/test-automation", async (req: Request, res: Response) => {
+    try {
+        const { type = "dm", text = "hi", account_id } = req.body as {
+            type?: "dm" | "comment";
+            text?: string;
+            account_id?: string;
+        };
+
+        const { processEvent } = await import("../automation/AutomationEngine");
+
+        // Find an Instagram account to use
+        const account = account_id
+            ? await prisma.connectedAccount.findUnique({ where: { id: account_id } })
+            : await prisma.connectedAccount.findFirst({ where: { platform: "INSTAGRAM", status: "CONNECTED" } });
+
+        if (!account) {
+            res.status(404).json({ error: "No connected Instagram account found" });
+            return;
+        }
+
+        const fakeCommentId = `test_comment_${Date.now()}`;
+        const fakeMessageId = `test_mid_${Date.now()}`;
+
+        const event = type === "comment" ? {
+            channel: "INSTAGRAM" as const,
+            accountId: account.id,
+            userId: account.user_id,
+            externalUserId: "test_sender_12345",
+            externalConversationId: "test_sender_12345",
+            externalMessageId: fakeCommentId,
+            messageText: text,
+            messageType: "text" as const,
+            isEcho: false,
+            isComment: true,
+            commentId: fakeCommentId,
+            postId: "test_post_12345",
+            senderName: "test_user",
+            timestamp: Date.now(),
+        } : {
+            channel: "INSTAGRAM" as const,
+            accountId: account.id,
+            userId: account.user_id,
+            externalUserId: "test_sender_12345",
+            externalConversationId: "test_sender_12345",
+            externalMessageId: fakeMessageId,
+            messageText: text,
+            messageType: "text" as const,
+            isEcho: false,
+            isComment: false,
+            timestamp: Date.now(),
+        };
+
+        await processEvent(event);
+
+        // Check if execution was logged
+        const execution = await prisma.automationExecution.findFirst({
+            where: {
+                external_message_id: type === "comment" ? fakeCommentId : fakeMessageId,
+            },
+        });
+
+        res.json({
+            test_sent: true,
+            event_type: type,
+            message_text: text,
+            account_used: account.platform_account_name,
+            account_user_id: account.user_id,
+            execution_logged: !!execution,
+            execution_success: execution?.success ?? null,
+            execution_error: execution?.error_message ?? null,
+            actions_executed: execution?.actions_executed ?? null,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+});
+
 export default router;
